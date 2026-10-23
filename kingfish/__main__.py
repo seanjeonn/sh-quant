@@ -51,6 +51,8 @@ def main():
     api = TossClient(con, os.environ.get("TOSS_CLIENT_ID"), os.environ.get("TOSS_CLIENT_SECRET"))
     pipe = Pipeline(cfg, con, api)
     try:
+        if a.cmd in ("repair", "backfill"):
+            pipe.refresh_calendar()  # status의 정규장 결손 집계가 캘린더를 쓴다
         {"run": pipe.run, "repair": pipe.repair, "status": pipe.status,
          "backfill": lambda: pipe.backfill(a.since)}[a.cmd]()
     except TossError as e:
