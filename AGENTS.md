@@ -11,7 +11,7 @@
 
 <!-- Replace per project. Include only what cannot be inferred from the code. -->
 
-- Build:
-- Test:
-- Gotchas:
+- Build: none (stdlib only, Python 3.11+). Run with `python3 -m kingfish <run|backfill|repair|status>`.
+- Test: `python3 -m unittest kingfish.test_kingfish -v` (no network).
+- Gotchas: Toss allows one valid token per client — every process must share the token via the SQLite `kv` table (never issue tokens elsewhere with the same key). Calls from IPs not on the WTS allowlist get 403. Candle `timestamp` is the bar END time; DB `ts` columns are UTC bar-end strings.
 
