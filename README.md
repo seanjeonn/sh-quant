@@ -6,12 +6,12 @@
 ## 준비
 
 1. 토스증권 WTS → 설정 → Open API 에서 `client_id`/`client_secret` 발급, **허용 IP**에 이 Mac의 공인 IP 등록.
-2. `config.toml` 의 `symbols` 를 원하는 관심종목으로 수정.
+2. `cp .env.example .env` 후 `TOSS_CLIENT_ID`/`TOSS_CLIENT_SECRET` 입력 (`.env`는 git에 올라가지 않음. 이미 export된 환경변수가 있으면 그쪽이 우선).
+3. `config.toml` 의 `symbols` 를 원하는 관심종목으로 수정.
 
 ## 실행
 
 ```sh
-export TOSS_CLIENT_ID=... TOSS_CLIENT_SECRET=...
 python3 -m kingfish backfill --since 2026-01-01   # 과거 1분봉 백필 (5분봉 자동 집계)
 python3 -m kingfish run                            # 상시 수집 루프 (포그라운드)
 python3 -m kingfish repair                         # 최근 repair_days 재동기화
@@ -36,10 +36,9 @@ SELECT symbol, ts, open, high, low, close, volume, n_bars FROM candles_5m WHERE 
 ## launchd 상시 실행
 
 ```sh
+# 자격증명은 WorkingDirectory(저장소 루트)의 .env 에서 읽는다
 sed -e "s|__REPO__|$PWD|g" -e "s|__HOME__|$HOME|g" \
-    -e "s|__CLIENT_ID__|$TOSS_CLIENT_ID|g" -e "s|__CLIENT_SECRET__|$TOSS_CLIENT_SECRET|g" \
     launchd/com.sh-quant.kingfish.plist > ~/Library/LaunchAgents/com.sh-quant.kingfish.plist
-chmod 600 ~/Library/LaunchAgents/com.sh-quant.kingfish.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.sh-quant.kingfish.plist
 launchctl print gui/$(id -u)/com.sh-quant.kingfish | grep state     # state = running
 # 중지: launchctl bootout gui/$(id -u)/com.sh-quant.kingfish

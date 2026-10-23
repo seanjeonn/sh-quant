@@ -11,11 +11,6 @@
     <string>run</string>
   </array>
   <key>WorkingDirectory</key><string>__REPO__</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>TOSS_CLIENT_ID</key><string>__CLIENT_ID__</string>
-    <key>TOSS_CLIENT_SECRET</key><string>__CLIENT_SECRET__</string>
-  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>30</integer>

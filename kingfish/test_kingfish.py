@@ -11,8 +11,18 @@ from . import db
 from .toss import TossClient, TossError
 
 
-def resp(obj):
-    return io.BytesIO(json.dumps(obj).encode())
+class _Resp(io.BytesIO):
+    headers = Message()
+
+
+def resp(obj, gz=False):
+    import gzip
+    raw = json.dumps(obj).encode()
+    r = _Resp(gzip.compress(raw) if gz else raw)
+    if gz:
+        r.headers = Message()
+        r.headers["Content-Encoding"] = "gzip"
+    return r
 
 
 def http_err(status, code, retry_after=None):
@@ -106,6 +116,12 @@ class TossTest(unittest.TestCase):
             self.assertEqual(self.api.get("/x"), 1)
             self.assertEqual(u.call_count, 2)  # 토큰 발급 POST 없이 kv 토큰 재사용
 
+    def test_gzip_body(self):
+        db.kv_set(self.con, "access_token", "t")
+        db.kv_set(self.con, "token_expires_at", "9999999999")
+        with mock.patch("kingfish.toss.urlopen", side_effect=[resp({"result": [7]}, gz=True)]):
+            self.assertEqual(self.api.get("/x"), [7])
+
     def test_4xx_raises(self):
         db.kv_set(self.con, "access_token", "t")
         db.kv_set(self.con, "token_expires_at", "9999999999")
@@ -120,6 +136,20 @@ class TossTest(unittest.TestCase):
         with mock.patch("kingfish.toss.urlopen", side_effect=[resp({"result": {}})]) as u:
             self.api.candles("AAPL", before="2026-03-25T09:00:00+09:00")
             self.assertIn("before=2026-03-25T09%3A00%3A00%2B09%3A00", u.call_args[0][0].full_url)
+
+
+class EnvTest(unittest.TestCase):
+    def test_load_env(self):
+        import os, tempfile
+        from .__main__ import load_env
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+            f.write("# comment\nTOSS_CLIENT_ID = 'abc'\nTOSS_CLIENT_SECRET=s=1\n\nBROKEN\n")
+        os.environ.pop("TOSS_CLIENT_ID", None)
+        os.environ["TOSS_CLIENT_SECRET"] = "keep"
+        load_env(f.name)
+        self.assertEqual(os.environ["TOSS_CLIENT_ID"], "abc")
+        self.assertEqual(os.environ["TOSS_CLIENT_SECRET"], "keep")  # 기존 환경변수 우선
+        load_env("/nonexistent/.env")  # 없으면 무시
 
 
 if __name__ == "__main__":

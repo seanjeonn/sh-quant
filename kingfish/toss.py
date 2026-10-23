@@ -1,4 +1,5 @@
 """토스증권 Open API 클라이언트 (stdlib urllib). 토큰은 SQLite kv로 프로세스 간 공유."""
+import gzip
 import json
 import logging
 import time
@@ -20,10 +21,18 @@ class TossError(Exception):
         self.status, self.code, self.request_id = status, code, request_id
 
 
+def _body(resp):
+    """응답 본문 → JSON. 서버가 Accept-Encoding 없이도 gzip으로 내려주므로 직접 해제."""
+    raw = resp.read()
+    if (resp.headers or Message()).get("Content-Encoding") == "gzip" or raw[:2] == b"\x1f\x8b":
+        raw = gzip.decompress(raw)
+    return json.loads(raw or b"{}")
+
+
 def _parse_error(e: HTTPError):
     try:
-        body = json.loads(e.read() or b"{}")
-    except ValueError:
+        body = _body(e)
+    except (ValueError, OSError):
         body = {}
     err = body.get("error")
     if isinstance(err, dict):  # API envelope
@@ -44,7 +53,7 @@ class TossClient:
             self.sleep(self.min_interval)
             try:
                 with urlopen(req, timeout=15) as r:
-                    return json.load(r)
+                    return _body(r)
             except HTTPError as e:
                 code, msg, rid = _parse_error(e)
                 if e.code == 429:
@@ -91,7 +100,7 @@ class TossClient:
         url = BASE + path + ("?" + qs if qs else "")
         tok = self._token()
         for _ in range(2):
-            req = Request(url, headers={"Authorization": f"Bearer {tok}", "Accept": "application/json"})
+            req = Request(url, headers={"Authorization": f"Bearer {tok}", "Accept": "application/json", "Accept-Encoding": "gzip"})
             try:
                 return self._send(req)["result"]
             except TossError as e:
