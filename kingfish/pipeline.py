@@ -55,6 +55,8 @@ class Pipeline:
         except Exception as e:  # 심볼 하나의 실패가 나머지를 막지 않도록
             log.error("%s %s failed after %d rows: %s", job, symbol, total, e)
             db.log_sync(self.con, job, symbol, started, False, total, str(e))
+            if isinstance(e, TossError) and e.status in (401, 403):
+                raise  # 인증·IP 차단은 심볼과 무관하므로 전체 중단
         return total
 
     def poll(self):

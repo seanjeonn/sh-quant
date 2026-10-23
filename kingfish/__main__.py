@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import db
 from .pipeline import Pipeline
-from .toss import TossClient
+from .toss import TossClient, TossError
 
 
 def load_env(path=".env"):
@@ -50,8 +50,11 @@ def main():
     con = db.connect(cfg["db_path"])
     api = TossClient(con, os.environ.get("TOSS_CLIENT_ID"), os.environ.get("TOSS_CLIENT_SECRET"))
     pipe = Pipeline(cfg, con, api)
-    {"run": pipe.run, "repair": pipe.repair, "status": pipe.status,
-     "backfill": lambda: pipe.backfill(a.since)}[a.cmd]()
+    try:
+        {"run": pipe.run, "repair": pipe.repair, "status": pipe.status,
+         "backfill": lambda: pipe.backfill(a.since)}[a.cmd]()
+    except TossError as e:
+        sys.exit(f"중단: {e}")
 
 
 if __name__ == "__main__":
