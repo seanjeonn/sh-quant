@@ -1,5 +1,6 @@
 db_path = "kingfish.db"
 poll_overlap = 30   # 매 분 다시 받아오는 최근 1m 봉 수 (폴링 누락 자동 복구 범위)
-repair_days = 3     # 시작 시·매시간 재동기화 범위(일)
+repair_days = 3     # 매시간 수집 공백 탐색 범위(일). CLI repair는 이 범위 전체를 재동기화
+token_path = ".kingfish-token.db"  # API 토큰 전용 파일(0600). 시장 데이터 DB와 분리
 # 시가총액 상위 10 (2026-10 기준, 필요 시 수정). 토스 심볼 표기는 시작 시 /stocks 로 검증됨.
 symbols = ["NVDA", "MSFT", "AAPL", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "BRK.B", "TSM"]

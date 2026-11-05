@@ -48,7 +48,8 @@ def main():
     if a.cmd != "status" and not (os.environ.get("TOSS_CLIENT_ID") and os.environ.get("TOSS_CLIENT_SECRET")):
         sys.exit("TOSS_CLIENT_ID / TOSS_CLIENT_SECRET 가 필요합니다 (.env 또는 환경변수)")
     con = db.connect(cfg["db_path"])
-    api = TossClient(con, os.environ.get("TOSS_CLIENT_ID"), os.environ.get("TOSS_CLIENT_SECRET"))
+    tok = db.connect_token(cfg.get("token_path", ".kingfish-token.db"))
+    api = TossClient(tok, os.environ.get("TOSS_CLIENT_ID"), os.environ.get("TOSS_CLIENT_SECRET"))
     pipe = Pipeline(cfg, con, api)
     try:
         if a.cmd in ("repair", "backfill"):

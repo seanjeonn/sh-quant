@@ -13,12 +13,30 @@ from . import db
 log = logging.getLogger("kingfish.toss")
 BASE = "https://openapi.tossinvest.com"
 AUTH_ERRORS = {"expired-token", "token-revoked", "invalid-token"}
+CREDENTIAL_ERRORS = {"invalid_client", "unauthorized_client", "invalid_grant", "missing-credentials"}
 
 
 class TossError(Exception):
     def __init__(self, status, code, message="", request_id=None):
         super().__init__(f"{status} {code}: {message} (requestId={request_id})")
         self.status, self.code, self.request_id = status, code, request_id
+
+
+def classify(e):
+    """오류 → 처리 정책.
+    token: 토큰 재발급 후 재시도 / fatal: 자격증명 오류, 사람이 고쳐야 함 / blocked: 403(허용 IP 등), 외부 조치로 회복
+    symbol: 해당 심볼만 건너뜀 / transient: 일시 오류, 다음 주기에 재시도"""
+    if not isinstance(e, TossError):
+        return "transient"
+    if e.code in CREDENTIAL_ERRORS:
+        return "fatal"
+    if e.status == 401:
+        return "token" if e.code in AUTH_ERRORS else "fatal"
+    if e.status == 403:
+        return "blocked"
+    if 400 <= e.status < 500 and e.status != 429:
+        return "symbol"
+    return "transient"
 
 
 def _body(resp):
@@ -57,7 +75,10 @@ class TossClient:
             except HTTPError as e:
                 code, msg, rid = _parse_error(e)
                 if e.code == 429:
-                    wait = float((e.headers or Message()).get("Retry-After") or 1)
+                    try:
+                        wait = float((e.headers or Message()).get("Retry-After") or 1)
+                    except ValueError:  # HTTP 날짜 형식
+                        wait = 1.0
                     log.warning("429 %s, retry in %.1fs", code, wait)
                     last = TossError(e.code, code, msg, rid)
                     self.sleep(wait)

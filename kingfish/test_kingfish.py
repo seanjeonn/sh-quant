@@ -8,7 +8,8 @@ from unittest import mock
 from urllib.error import HTTPError
 
 from . import db
-from .toss import TossClient, TossError
+from .pipeline import Pipeline
+from .toss import TossClient, TossError, classify
 
 
 class _Resp(io.BytesIO):
@@ -59,13 +60,55 @@ class DbTest(unittest.TestCase):
         self.assertEqual((n, lo, hi), (6, "2026-10-05 13:31:00", "2026-10-05 13:36:00"))
         self.assertEqual(db.rollup_5m(self.con, "AAPL", lo, hi), 2)
         r = self.con.execute("SELECT * FROM candles_5m WHERE ts='2026-10-05 13:35:00'").fetchone()
-        self.assertEqual(r, ("AAPL", "2026-10-05 13:35:00", 10.0, 24.0, 4.6, 15.0, 500.0, 5))
+        self.assertEqual(r, ("AAPL", "2026-10-05 13:35:00", 10.0, 24.0, 4.6, 15.0, 500.0, 5, 1))
         r = self.con.execute("SELECT n_bars FROM candles_5m WHERE ts='2026-10-05 13:40:00'").fetchone()
         self.assertEqual(r, (1,))
         # 사후 정정된 봉 upsert → 재집계에 반영
         db.upsert_1m(self.con, [("AAPL", "2026-10-05 13:35:00", 14, 99, 4.6, 15, 100)])
         db.rollup_5m(self.con, "AAPL", "2026-10-05 13:35:00", "2026-10-05 13:35:00")
         self.assertEqual(self.con.execute("SELECT high FROM candles_5m WHERE ts='2026-10-05 13:35:00'").fetchone(), (99.0,))
+
+    def test_rollup_idempotent(self):
+        bars = [("AAPL", f"2026-10-05 13:{m:02d}:00", 0.1 * m, 0.3 * m, 0.01 * m, 0.2 * m, 0.7) for m in range(31, 41)]
+        db.upsert_1m(self.con, bars)
+        snap = lambda: self.con.execute("SELECT * FROM candles_5m ORDER BY ts").fetchall()
+        db.rollup_5m(self.con, "AAPL", bars[0][1], bars[-1][1])
+        first = snap()
+        for _ in range(50):  # 증분이 아니라 1m에서 재계산 → 반복해도 값이 그대로
+            db.upsert_1m(self.con, bars)
+            db.rollup_5m(self.con, "AAPL", bars[0][1], bars[-1][1])
+        self.assertEqual(snap(), first)
+
+    def test_complete(self):
+        db.upsert_1m(self.con, [("AAPL", "2026-10-05 12:05:00", 1, 1, 1, 1, 1)])
+        db.rollup_5m(self.con, "AAPL", "2026-10-05 12:05:00", "2026-10-05 12:05:00", "2026-10-05 12:06:04")
+        q = "SELECT complete FROM candles_5m WHERE ts='2026-10-05 12:05:00'"
+        self.assertEqual(self.con.execute(q).fetchone(), (0,))
+        db.rollup_5m(self.con, "AAPL", "2026-10-05 12:05:00", "2026-10-05 12:05:00", "2026-10-05 12:06:05")
+        self.assertEqual(self.con.execute(q).fetchone(), (1,))
+
+    def test_coverage_gaps(self):
+        db.save_sessions(self.con, {"today": {"date": "2026-10-05", "regularMarket": {
+            "startTime": "2026-10-05T22:30:00+09:00", "endTime": "2026-10-06T05:00:00+09:00"}}})
+        for f in ("2026-10-05 14:00:00", "2026-10-05 14:40:00"):  # poll 성공 = 직전 30분
+            db.log_sync(self.con, "poll", "AAPL", f, True, finished=f)
+        db.log_sync(self.con, "poll", "AAPL", "x", False, finished="2026-10-05 14:20:00")  # 실패 poll은 무시
+        gaps = db.coverage_gaps(self.con, "AAPL", "2026-10-05 00:00:00", "2026-10-05 14:50:00", 30)
+        self.assertEqual(gaps, [("2026-10-05 14:00:00", "2026-10-05 14:10:00"), ("2026-10-05 14:40:00", "2026-10-05 14:50:00")])
+        db.log_sync(self.con, "cover", "AAPL", "2026-10-05 14:00:00", True, finished="2026-10-05 14:10:00")
+        gaps = db.coverage_gaps(self.con, "AAPL", "2026-10-05 00:00:00", "2026-10-05 14:50:00", 30)
+        self.assertEqual(gaps, [("2026-10-05 14:40:00", "2026-10-05 14:50:00")])
+
+    def test_token_db_separate(self):
+        import os, stat, tempfile
+        d = tempfile.mkdtemp()
+        data = db.connect(os.path.join(d, "k.db"))
+        db.kv_set(data, "access_token", "leaked")
+        data = db.connect(os.path.join(d, "k.db"))  # 예전 버전이 남긴 토큰은 시작 시 제거
+        self.assertIsNone(db.kv_get(data, "access_token"))
+        tok = db.connect_token(os.path.join(d, "t.db"))
+        db.kv_set(tok, "access_token", "t")
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.join(d, "t.db")).st_mode), 0o600)
 
     def test_sessions(self):
         cal = {"today": {"date": "2026-10-05",
@@ -136,6 +179,79 @@ class TossTest(unittest.TestCase):
         with mock.patch("kingfish.toss.urlopen", side_effect=[resp({"result": {}})]) as u:
             self.api.candles("AAPL", before="2026-03-25T09:00:00+09:00")
             self.assertIn("before=2026-03-25T09%3A00%3A00%2B09%3A00", u.call_args[0][0].full_url)
+
+
+class FakeApi:
+    def __init__(self, candles):
+        self.result, self.calls = {"candles": candles}, []
+
+    def candles(self, symbol, before=None, count=200, interval="1m"):
+        self.calls.append((symbol, before, count))
+        return self.result
+
+
+def at(ts):
+    return lambda: db.epoch(ts)
+
+
+class PipelineTest(unittest.TestCase):
+    def setUp(self):
+        self.con = db.connect(":memory:")
+
+    def test_skips_in_progress_bar(self):
+        api = FakeApi([candle("2026-10-05T21:07:00+09:00", 1, 1, 1, 1, 1),   # 12:07 UTC, 진행 중
+                       candle("2026-10-05T21:06:00+09:00", 1, 1, 1, 1, 1)])  # 12:06 UTC, 닫힘
+        p = Pipeline({"symbols": ["AAPL"]}, self.con, api, clock=at("2026-10-05 12:06:05"))
+        self.assertEqual(p.sync("AAPL", "poll", max_pages=1), 1)
+        self.assertEqual(self.con.execute("SELECT ts FROM candles_1m").fetchall(), [("2026-10-05 12:06:00",)])
+        self.assertEqual(self.con.execute("SELECT ts, complete FROM candles_5m").fetchall(), [("2026-10-05 12:10:00", 0)])
+
+    def test_repair_task_covers_gap(self):
+        api = FakeApi([candle("2026-10-05T23:05:00+09:00", 1, 1, 1, 1, 1)])
+        p = Pipeline({"symbols": ["AAPL"]}, self.con, api, clock=at("2026-10-05 15:00:00"))
+        p.enqueue("gap", "AAPL", "2026-10-05 14:00:00", "2026-10-05 17:20:00")
+        self.assertEqual([t[2:] for t in p.queue], [("2026-10-05 14:00:00", "2026-10-05 17:10:00"),
+                                                    ("2026-10-05 17:10:00", "2026-10-05 17:20:00")])
+        p.queue = p.queue[:1]
+        p.drain(float("inf"))
+        self.assertEqual(api.calls, [("AAPL", "2026-10-06T02:11:00+09:00", 192)])
+        self.assertTrue(db.covered(self.con, "AAPL", "2026-10-05 14:00:00", "2026-10-05 17:10:00"))
+        self.assertEqual(p.queue, [])
+
+    def test_fatal_keeps_task_queued(self):
+        class Boom(FakeApi):
+            def candles(self, *a, **k):
+                raise TossError(403, "ip-not-allowed")
+        p = Pipeline({"symbols": ["AAPL"]}, self.con, Boom([]), clock=at("2026-10-05 15:00:00"))
+        p.enqueue("gap", "AAPL", "2026-10-05 14:00:00", "2026-10-05 14:10:00")
+        with self.assertRaises(TossError):
+            p.drain(float("inf"))
+        self.assertEqual(len(p.queue), 1)
+
+
+class ClassifyTest(unittest.TestCase):
+    def test_classify(self):
+        self.assertEqual(classify(TossError(401, "expired-token")), "token")
+        self.assertEqual(classify(TossError(401, "invalid_client")), "fatal")
+        self.assertEqual(classify(TossError(400, "invalid_client")), "fatal")
+        self.assertEqual(classify(TossError(0, "missing-credentials")), "fatal")
+        self.assertEqual(classify(TossError(403, "forbidden")), "blocked")
+        self.assertEqual(classify(TossError(404, "stock-not-found")), "symbol")
+        self.assertEqual(classify(TossError(429, "rate-limit-exceeded")), "transient")
+        self.assertEqual(classify(TossError(503, "x")), "transient")
+        self.assertEqual(classify(ValueError()), "transient")
+
+    def test_retry_after_http_date(self):
+        con = db.connect(":memory:")
+        db.kv_set(con, "access_token", "t")
+        db.kv_set(con, "token_expires_at", "9999999999")
+        waits = []
+        api = TossClient(con, "id", "secret", sleep=waits.append, min_interval=0)
+        e = http_err(429, "rate-limit-exceeded")
+        e.headers["Retry-After"] = "Wed, 21 Oct 2026 07:28:00 GMT"
+        with mock.patch("kingfish.toss.urlopen", side_effect=[e, resp({"result": 1})]):
+            self.assertEqual(api.get("/x"), 1)
+        self.assertIn(1.0, waits)
 
 
 class EnvTest(unittest.TestCase):
