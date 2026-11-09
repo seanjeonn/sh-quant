@@ -11,7 +11,6 @@
 
 <!-- Replace per project. Include only what cannot be inferred from the code. -->
 
-- Build: `uv sync`; dashboard is static `index.html` (Vercel copies it + `results/` via `vercel.json`)
-- Test: `uv run pytest -q engine`
-- Gotchas: `engine/` and `run.py` define the comparison rules — the daily agent must only add `strategies/` files. Strategy signals are checked for lookahead by truncation; `data/cache/` is gitignored, `data/news/` is committed.
-
+- Build: `cargo build --release`; dashboard is static `index.html` (Vercel copies it + `results/` via `vercel.json`, no Rust build there)
+- Test: `cargo test`
+- Gotchas: `src/` defines the comparison rules — the daily agent must only add `strategies/*.toml`. The signal DSL has no forward-looking operator and the engine also re-checks signals by truncating history. Paths resolve from `CARGO_MANIFEST_DIR`, so run via `cargo run` from a checkout. `data/cache/` is gitignored, `data/news/` is committed.
