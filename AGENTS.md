@@ -11,7 +11,7 @@
 
 <!-- Replace per project. Include only what cannot be inferred from the code. -->
 
-- Build:
-- Test:
-- Gotchas:
+- Build: `uv sync`; dashboard is static `index.html` (Vercel copies it + `results/` via `vercel.json`)
+- Test: `uv run pytest -q engine`
+- Gotchas: `engine/` and `run.py` define the comparison rules — the daily agent must only add `strategies/` files. Strategy signals are checked for lookahead by truncation; `data/cache/` is gitignored, `data/news/` is committed.
 
