@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sh-quant 전략 기록</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#fafaf9;--fg:#1c1917;--mute:#78716c;--line:#e7e5e4;--card:#fff;--acc:#2563eb;--pos:#15803d;--neg:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--fg:#e7e5e4;--mute:#a8a29e;--line:#292524;--card:#1c1917;--acc:#60a5fa;--pos:#4ade80;--neg:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,system-ui,"Apple SD Gothic Neo",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 8px}
+.sub{color:var(--mute);margin:0 0 16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+button,select{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 12px;cursor:pointer}
+button[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+table{border-collapse:collapse;width:100%;white-space:nowrap}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
+th{color:var(--mute);font-weight:500;font-size:12px;cursor:pointer;user-select:none}
+tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.mute{color:var(--mute)}
+.tag{display:inline-block;font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-right:3px}
+#detail{display:none;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+#detail p{margin:4px 0}
+.chartbox{position:relative;height:300px;margin-top:12px}
+ol{padding-left:20px}li{margin:4px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>sh-quant 전략 기록</h1>
+<p class="sub">매일 하나씩 새 전략을 백테스트합니다. 순위는 OOS(2023~) Sharpe 기준, 수익은 동일가중 유니버스, 비교 대상은 동일가중 Buy&amp;Hold.</p>
+<div class="bar" id="markets"></div>
+<div class="bar"><label>태그 <select id="tag"><option value="">전체</option></select></label></div>
+<div class="wrap"><table>
+<thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+<section id="detail">
+<strong id="d-name"></strong> <a id="d-code" target="_blank" rel="noopener">코드</a>
+<p><span class="mute">가설</span> <span id="d-hyp"></span></p>
+<p><span class="mute">교훈</span> <span id="d-lesson"></span></p>
+<div class="chartbox"><canvas id="chart" aria-label="누적 수익 곡선"></canvas></div>
+</section>
+<h2>타임라인</h2>
+<ol id="timeline" reversed></ol>
+</main>
+<script>
+const REPO = "https://github.com/seanjeonn/sh-quant/blob/main/strategies/";
+const COLS = [
+  ["date","날짜"],["name","전략"],["tags","태그"],
+  ["oos.sharpe","OOS Sharpe"],["oos.cagr","OOS CAGR"],["oos.excess_cagr","OOS 초과"],["oos.mdd","OOS MDD"],
+  ["is.sharpe","IS Sharpe"],["is.cagr","IS CAGR"],["oos.exposure","노출"],
+];
+const PCT = new Set(["oos.cagr","oos.excess_cagr","oos.mdd","is.cagr","oos.exposure"]);
+let all = [], market = "US", sortKey = "oos.sharpe", desc = true, chart, selId;
+
+const get = (e, k) => k.includes(".") ? e.markets?.[market]?.[k.split(".")[0]]?.[k.split(".")[1]] : e[k];
+const fmt = (k, v) => v == null ? "–" : PCT.has(k) ? (v*100).toFixed(1)+"%" : typeof v === "number" ? v.toFixed(2) : v;
+const cls = (k, v) => typeof v !== "number" || k.endsWith("exposure") ? "" : k.endsWith("mdd") ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function render() {
+  document.getElementById("markets").innerHTML = ["US","KR"].map(m =>
+    `<button aria-pressed="${m===market}" data-m="${m}">${m === "US" ? "미국" : "한국"}</button>`).join("");
+  document.getElementById("head").innerHTML = COLS.map(([k,l]) =>
+    `<th data-k="${k}">${l}${k===sortKey ? (desc?" ↓":" ↑") : ""}</th>`).join("");
+  const tag = document.getElementById("tag").value;
+  const rows = all.filter(e => e.status === "ok" && (!tag || e.tags.includes(tag)))
+    .sort((a,b) => ((get(a,sortKey) ?? -1e9) > (get(b,sortKey) ?? -1e9) ? 1 : -1) * (desc ? -1 : 1));
+  document.getElementById("rows").innerHTML = rows.map(e => `<tr data-id="${esc(e.id)}" class="${e.id===selId?"sel":""}">` +
+    COLS.map(([k]) => k === "tags" ? `<td>${e.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join("")}</td>`
+      : `<td class="${cls(k,get(e,k))}">${esc(fmt(k,get(e,k)))}</td>`).join("") + "</tr>").join("")
+    || `<tr><td colspan="${COLS.length}" class="mute">기록 없음</td></tr>`;
+  document.getElementById("timeline").innerHTML = [...all].reverse().map(e =>
+    `<li><span class="mute">${esc(e.date)}</span> ${esc(e.name)} ${e.status === "failed"
+      ? `<span class="neg">실패: ${esc(e.error)}</span>` : `<span class="mute">— ${esc(e.lesson ?? "교훈 미기록")}</span>`}</li>`).join("");
+  if (selId) showDetail(selId);
+}
+
+async function showDetail(id) {
+  selId = id;
+  const e = all.find(x => x.id === id);
+  const d = document.getElementById("detail");
+  d.style.display = "block";
+  document.getElementById("d-name").textContent = e.name;
+  document.getElementById("d-hyp").textContent = e.hypothesis;
+  document.getElementById("d-lesson").textContent = e.lesson ?? "–";
+  document.getElementById("d-code").href = REPO + id + ".py";
+  const c = (await (await fetch(`results/${id}.json`)).json()).curves[market];
+  const css = getComputedStyle(document.documentElement);
+  chart?.destroy();
+  chart = new Chart(document.getElementById("chart"), {
+    type: "line",
+    data: { labels: c.dates, datasets: [
+      { label: e.name, data: c.strategy, borderColor: css.getPropertyValue("--acc"), borderWidth: 2, pointRadius: 0 },
+      { label: "Buy & Hold", data: c.buy_hold, borderColor: css.getPropertyValue("--mute"), borderWidth: 1.5, pointRadius: 0 },
+    ]},
+    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      scales: { x: { ticks: { maxTicksLimit: 8, color: css.getPropertyValue("--mute") } },
+                y: { type: "logarithmic", ticks: { color: css.getPropertyValue("--mute") } } },
+      plugins: { legend: { labels: { color: css.getPropertyValue("--fg") } } } },
+  });
+}
+
+document.addEventListener("click", ev => {
+  const m = ev.target.closest("[data-m]"), th = ev.target.closest("th[data-k]"), tr = ev.target.closest("tr[data-id]");
+  if (m) { market = m.dataset.m; render(); }
+  else if (th) { const k = th.dataset.k; desc = k === sortKey ? !desc : true; sortKey = k; render(); }
+  else if (tr) { selId = tr.dataset.id; render(); }
+});
+document.getElementById("tag").addEventListener("change", render);
+
+fetch("results/index.json", { cache: "no-store" }).then(r => r.json()).then(idx => {
+  all = idx;
+  const tags = [...new Set(idx.flatMap(e => e.tags))].sort();
+  document.getElementById("tag").innerHTML += tags.map(t => `<option>${esc(t)}</option>`).join("");
+  render();
+});
+</script>
+</body>
+</html>
