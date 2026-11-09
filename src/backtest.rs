@@ -1,4 +1,5 @@
-//! Fixed backtest rules. Agents must not edit this file.
+//! Fixed backtest rules. Research-mode agents must not edit this file.
+//! Engineering changes require an approved tracking issue, separate branch, and regression tests.
 //!
 //! - signal at close t is the position held over bar t+1
 //! - one-way cost per unit of turnover

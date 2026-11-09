@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "set_id": "TODO",
+  "selected_at": null,
+  "plan_sha256": null,
+  "data_manifest_sha256": null,
+  "engine_commit": null,
+  "attempt_ids": [],
+  "successful_baseline_id": null,
+  "successful_variant_ids": [],
+  "selected_run_id": null,
+  "selection_split": "IS",
+  "objective_values_and_tie_break_evidence": [],
+  "reason": "TODO",
+  "holdout_status": "exposed",
+  "oos_used_for_selection": false
+}

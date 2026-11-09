@@ -2,3 +2,5 @@ data/cache/
 .vercel
 public/
 target/
+__pycache__/
+*.py[cod]

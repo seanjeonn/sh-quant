@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "set_id": "TODO_YYYY-MM-DD_slug",
+  "timezone": "Asia/Seoul",
+  "status": "planned",
+  "tracking_issue": null,
+  "created_at": null,
+  "hypothesis": "TODO",
+  "selection_reason": "TODO",
+  "prior_sets_and_lessons": [],
+  "markets": ["US", "KR"],
+  "engine_commit": null,
+  "cargo_lock_sha256": null,
+  "data_manifest_path": null,
+  "data_manifest_sha256": null,
+  "snapshot_location": null,
+  "splits": {
+    "development": "IS, through 2022-12-31 under the pinned engine",
+    "evaluation": "existing engine OOS, exposed during every run",
+    "boundary_verification": "TODO verify exact boundary behavior in pinned src/backtest.rs"
+  },
+  "holdout_status": "exposed",
+  "prior_oos_exposure": "TODO",
+  "baseline": {
+    "run_id": "TODO_set-id__baseline",
+    "parameters": {},
+    "signal": "TODO"
+  },
+  "variants": [
+    {"run_id": "TODO_set-id__v001", "parameters": {}, "signal": "TODO"},
+    {"run_id": "TODO_set-id__v002", "parameters": {}, "signal": "TODO"}
+  ],
+  "search_order_or_adaptive_is_only_rule": "TODO",
+  "selection": {
+    "split": "IS",
+    "objective": "TODO exact metric, aggregation, market and direction",
+    "tie_break": "TODO"
+  },
+  "evaluation": {
+    "benchmark": "engine equal-weight buy-and-hold",
+    "metrics": ["cagr", "sharpe", "mdd", "excess_cagr"],
+    "accept_criteria": "TODO",
+    "defer_criteria": "TODO research-based inconclusiveness, not operational failure",
+    "reject_criteria": "TODO"
+  },
+  "budget": {"max_attempts": 12, "max_wall_minutes": 120, "max_repairs": 3},
+  "stop_conditions": "TODO completion/early-stop criteria; budget failure is blocked",
+  "revision_policy": "Post-observation search/selection changes require a subsequent set; preserve this plan."
+}
