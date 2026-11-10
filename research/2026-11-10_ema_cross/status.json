@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "set_id": "2026-11-10_ema_cross",
+  "status": "blocked",
+  "conclusion": null,
+  "blocked_stage": "data_setup",
+  "tracking_issue": "https://github.com/seanjeonn/sh-quant/issues/23",
+  "engine_commit": "5c217b0a0fe5ae56d5e77704dc2fb654572d036c",
+  "cargo_lock_sha256": "0aa36b0625ba4d8a2f549f69f1df97ab41bfb9f5e0438f7581230f3e71ab6455",
+  "created_at": "2026-11-10T13:20:20.967746+09:00",
+  "hypothesis": "EMA 20/60 및 인접 파라미터가 고정 비용하에서 양 시장의 추세추종 성과를 개선하는지 검증할 예정. 실험 미실행, 계획 미확정.",
+  "strategy_attempts": 0,
+  "baseline_successes": 0,
+  "variant_successes": 0,
+  "data_preparation_exit_code": 1,
+  "data_preparation_attempted_symbols": 24,
+  "data_preparation_validated_symbols": 14,
+  "data_preparation_failed_symbols": 10,
+  "invalid_ohlc_rows": 19,
+  "resume_conditions": [
+    "Resolve source OHLC inconsistencies through separately reviewed data engineering; do not silently repair or omit tickers.",
+    "Revalidate all 24 symbols and preserve a new versioned snapshot.",
+    "Freeze and push a complete plan before any strategy execution."
+  ],
+  "related_issues": [
+    24,
+    20,
+    16,
+    13,
+    21
+  ],
+  "holdout_status": "exposed in existing engine; no new backtest performed"
+}

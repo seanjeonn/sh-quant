@@ -1,0 +1,531 @@
+{
+  "expected_symbols": 24,
+  "audited_symbols": 24,
+  "invalid_symbols": 10,
+  "invalid_rows": 19,
+  "cache_files_installed": 0,
+  "entries": [
+    {
+      "market": "KR",
+      "ticker": "000270",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_000270.raw.json",
+      "raw_sha256": "32f3e37737af3e49d1481425da65bc4a9d4ce88de7df660f08b31be5a314f388",
+      "violations": [
+        {
+          "date": "2023-01-25",
+          "open": 64900.0,
+          "high": 65400.0,
+          "low": 64800.0,
+          "close": 64300.0,
+          "volume": 9470,
+          "adjusted_close": 55026.08203125,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-01-15",
+          "open": 88700.0,
+          "high": 89500.0,
+          "low": 88400.0,
+          "close": 90900.0,
+          "volume": 150188,
+          "adjusted_close": 77789.59375,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "000660",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_000660.raw.json",
+      "raw_sha256": "ebaca80f40c16cd3af201aece3b9aeff7fabb179d0a3f0e554f259c4453fb9a7",
+      "violations": [
+        {
+          "date": "2023-02-02",
+          "open": 94900.0,
+          "high": 94900.0,
+          "low": 92700.0,
+          "close": 91400.0,
+          "volume": 8254,
+          "adjusted_close": 88875.90625,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2023-02-09",
+          "open": 94800.0,
+          "high": 94800.0,
+          "low": 92600.0,
+          "close": 94900.0,
+          "volume": 12117,
+          "adjusted_close": 92279.2578125,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-10-14",
+          "open": 186900.0,
+          "high": 192300.0,
+          "low": 186900.0,
+          "close": 186000.0,
+          "volume": 3309274,
+          "adjusted_close": 183664.546875,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 3
+    },
+    {
+      "market": "KR",
+      "ticker": "005380",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_005380.raw.json",
+      "raw_sha256": "efcbbd2727cc9e61e8374a75909df9b5e02bc7d4f5cbe2aac25b9f64720bbf47",
+      "violations": [
+        {
+          "date": "2023-02-01",
+          "open": 169200.0,
+          "high": 171500.0,
+          "low": 168700.0,
+          "close": 167000.0,
+          "volume": 3251,
+          "adjusted_close": 143375.96875,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-01-15",
+          "open": 186000.0,
+          "high": 187200.0,
+          "low": 185800.0,
+          "close": 187500.0,
+          "volume": 35456,
+          "adjusted_close": 163427.59375,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "005930",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_005930.raw.json",
+      "raw_sha256": "a5f605ee9f1ce40c05d14c357ea5e1c12da7f921e20c977f01c795c4ce64ab30",
+      "violations": [
+        {
+          "date": "2024-10-14",
+          "open": 59500.0,
+          "high": 61200.0,
+          "low": 59400.0,
+          "close": 59300.0,
+          "volume": 20886249,
+          "adjusted_close": 56493.0,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 1
+    },
+    {
+      "market": "KR",
+      "ticker": "006400",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_006400.raw.json",
+      "raw_sha256": "e6a179d1d936ef1188c1efd12496a965ec5019c824352a65b3a407a87f7467a3",
+      "violations": [
+        {
+          "date": "2024-10-14",
+          "open": 365500.0,
+          "high": 367000.0,
+          "low": 358000.0,
+          "close": 373000.0,
+          "volume": 318814,
+          "adjusted_close": 371524.4375,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-11-07",
+          "open": 296000.0,
+          "high": 298000.0,
+          "low": 286000.0,
+          "close": 298500.0,
+          "volume": 963012,
+          "adjusted_close": 297319.15625,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "035420",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_035420.raw.json",
+      "raw_sha256": "4f65441c78b6a94772be1dc946216ef6faee02d1508010a45bc08a36a07130c7",
+      "violations": [
+        {
+          "date": "2023-02-02",
+          "open": 213000.0,
+          "high": 213500.0,
+          "low": 210500.0,
+          "close": 205500.0,
+          "volume": 20981,
+          "adjusted_close": 201176.453125,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 1
+    },
+    {
+      "market": "KR",
+      "ticker": "035720",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_035720.raw.json",
+      "raw_sha256": "ae05fad328c085caac728195d2c7b4268fdfa35d1b06d1fe180f0a641025c2b8",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "KR",
+      "ticker": "051910",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_051910.raw.json",
+      "raw_sha256": "cd7419e79d94562e6317711de91fccc1d05f287fa258ef3f57beaa7f1d404fe3",
+      "violations": [
+        {
+          "date": "2024-10-14",
+          "open": 350000.0,
+          "high": 351000.0,
+          "low": 342500.0,
+          "close": 354500.0,
+          "volume": 283883,
+          "adjusted_close": 350925.40625,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-11-07",
+          "open": 300000.0,
+          "high": 305000.0,
+          "low": 294000.0,
+          "close": 305500.0,
+          "volume": 365149,
+          "adjusted_close": 302419.5,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "055550",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_055550.raw.json",
+      "raw_sha256": "d095df25426f6ce80450c4ae39eb4604b10232ae96d918e36b686691e5f1b4d1",
+      "violations": [
+        {
+          "date": "2023-01-30",
+          "open": 44250.0,
+          "high": 44300.0,
+          "low": 43150.0,
+          "close": 44750.0,
+          "volume": 2360,
+          "adjusted_close": 38161.8125,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2023-02-06",
+          "open": 40750.0,
+          "high": 41450.0,
+          "low": 40450.0,
+          "close": 41650.0,
+          "volume": 763,
+          "adjusted_close": 35518.203125,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "069500",
+      "rows_before_cutoff": 2876,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 29,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_069500.raw.json",
+      "raw_sha256": "7dc1f42301863afd7cfffd714667ed72982b5efcac12ffce9e669d1c1cc00a62",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "KR",
+      "ticker": "105560",
+      "rows_before_cutoff": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_105560.raw.json",
+      "raw_sha256": "5da37819ed2e20050b55fb6ff9a311f76b291b25762d78b847fd2c622da0f29a",
+      "violations": [
+        {
+          "date": "2024-01-15",
+          "open": 51000.0,
+          "high": 51200.0,
+          "low": 50900.0,
+          "close": 51600.0,
+          "volume": 83004,
+          "adjusted_close": 46023.74609375,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-10-14",
+          "open": 92500.0,
+          "high": 98500.0,
+          "low": 92000.0,
+          "close": 91300.0,
+          "volume": 2152870,
+          "adjusted_close": 86138.234375,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "KR",
+      "ticker": "207940",
+      "rows_before_cutoff": 2444,
+      "first": "2016-11-11",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "live_bars_excluded": 1,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_207940.raw.json",
+      "raw_sha256": "29fcf87a158174543b65a9109b80165041fe237eef9f4c5644561e999d9e896b",
+      "violations": [
+        {
+          "date": "2023-02-10",
+          "open": 1243866.625,
+          "high": 1246941.625,
+          "low": 1233103.875,
+          "close": 1251554.25,
+          "volume": 164,
+          "adjusted_close": 1251554.25,
+          "reason": "invalid OHLC range or numeric constraints"
+        },
+        {
+          "date": "2024-01-15",
+          "open": 1140851.625,
+          "high": 1163914.75,
+          "low": 1136239.0,
+          "close": 1174677.5,
+          "volume": 3956,
+          "adjusted_close": 1174677.5,
+          "reason": "invalid OHLC range or numeric constraints"
+        }
+      ],
+      "violation_count": 2
+    },
+    {
+      "market": "US",
+      "ticker": "AAPL",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_AAPL.raw.json",
+      "raw_sha256": "f81c818ef86cbebfbca388d85be1609bc116e6cb1d80eb9e25d86ef12918da26",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "AMZN",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_AMZN.raw.json",
+      "raw_sha256": "54aaa56fb0562a0365a42738e89a332f7f9e81ab26223c833b7232ba0d8c9269",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "BRK-B",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_BRK-B.raw.json",
+      "raw_sha256": "96b9763319e52df6e63695e904b63dab733e15930f5ccfc29451e4f77408a3e5",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "GOOGL",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_GOOGL.raw.json",
+      "raw_sha256": "81f7f839aa248e6b0b6254841d345b10b4a7fd940244f1059b428895ccd9bba1",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "JNJ",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_JNJ.raw.json",
+      "raw_sha256": "d4ba11e4b56c792acbe25775f103244b30353ba5e274a5fe2ade230e89e39faa",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "JPM",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_JPM.raw.json",
+      "raw_sha256": "eae2532f3bec7e3213a521c12300c55766f827bc86cc6e9760e8c54810cdf3eb",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "META",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_META.raw.json",
+      "raw_sha256": "fa1d89814221066a436682689355f82281eb9401c493a6518ef3ce23e0db5f91",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "MSFT",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_MSFT.raw.json",
+      "raw_sha256": "308f35d722c44ae524b62ffb0521ca7d1b3c1e473224b438fc62a07dcc0627d2",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "NVDA",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_NVDA.raw.json",
+      "raw_sha256": "e3d68a7ae9a34a8df697c31490813dd4cf2f2ec50d2590768e2ce0583e6cd6d5",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "QQQ",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_QQQ.raw.json",
+      "raw_sha256": "e0f061de243b6768000884ae8f8be7fe24a7452d29ff061eb921531e84760df5",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "SPY",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_SPY.raw.json",
+      "raw_sha256": "69771cfd641cc85575c6a62fdfcdc7ddfe141adb51b454463ee105ed263274a1",
+      "violations": [],
+      "violation_count": 0
+    },
+    {
+      "market": "US",
+      "ticker": "XOM",
+      "rows_before_cutoff": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "live_bars_excluded": 0,
+      "raw_snapshot_path": "data/cache/snapshot_2026-11-10_ema_cross/US_XOM.raw.json",
+      "raw_sha256": "eec5c037e739774f91ab10ebf8411111fbd6898ca5ad41cb1939fe923b12fc98",
+      "violations": [],
+      "violation_count": 0
+    }
+  ],
+  "confirmations": [
+    {
+      "path": "data/cache/snapshot_2026-11-10_ema_cross/005930-confirm-query1.finance.yahoo.com.json",
+      "sha256": "37228bdbc9991f0f2d248685e0968baaba3bfb34dc62c963aa40a405e01f0843"
+    },
+    {
+      "path": "data/cache/snapshot_2026-11-10_ema_cross/005930-confirm-query2.finance.yahoo.com.json",
+      "sha256": "4d57d403152d34319e41a6472ef059e5dd1eaae4b71b3e1aed97946046394913"
+    }
+  ]
+}
