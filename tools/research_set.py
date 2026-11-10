@@ -133,14 +133,22 @@ def contract():
     return research_contract
 
 
+ROOT_BUILD_INPUTS = ('Cargo.toml', 'Cargo.lock', 'build.rs', 'rust-toolchain', 'rust-toolchain.toml')
+
+
 def code_tree(repo):
-    names = git(repo, 'ls-files', '-z', '--', 'src', 'Cargo.toml', 'Cargo.lock',
-                'build.rs', '.cargo', 'tools').decode().split('\0')
+    names = git(repo, 'ls-files', '-z', '--', 'src', *ROOT_BUILD_INPUTS,
+                '.cargo', 'tools').decode().split('\0')
     result = {}
     for name in sorted(n for n in names if n):
         p = safe_path(repo / name)
         result[name] = digest(p.read_bytes())
     require('Cargo.lock' in result and any(n.startswith('src/') for n in result), 'missing_code')
+    # The map's keys freeze presence as well as content, including untracked roots.
+    for name in ROOT_BUILD_INPUTS:
+        p = repo / name
+        if p.exists() or p.is_symlink():
+            result[name] = digest(safe_path(p).read_bytes())
     # Include untracked Rust/config files: compilation cannot silently gain an input.
     for folder in ('src', '.cargo', 'tools'):
         if (repo / folder).exists():
@@ -176,7 +184,7 @@ def input_fingerprint(planpath, repo, binary, manifest):
     require(digest(read(manifest)) == plan['data_manifest_sha256'], 'manifest_changed')
     require(git(repo, 'cat-file', '-t', plan['engine_commit']).strip() == b'commit', 'missing_engine_commit')
     # Engine inputs must equal the pinned revision, not merely HEAD metadata.
-    for name in ('src', 'Cargo.toml', 'Cargo.lock', 'build.rs', '.cargo'):
+    for name in ('src', *ROOT_BUILD_INPUTS, '.cargo'):
         require(not git(repo, 'diff', '--no-ext-diff', '--no-textconv', plan['engine_commit'], '--', name), 'dirty_engine')
     data = load(manifest)
     require(data.get('status') == 'complete' and isinstance(data.get('entries'), list) and data['entries'], 'incomplete_manifest')
@@ -419,10 +427,12 @@ class Runner:
             if kind == 'checkpoint':
                 require(e['kind'] in ('plan', 'selection'), 'invalid_checkpoint')
                 require((not seen_starts and not plan_gate) if e['kind'] == 'plan' else selected and not evaluated and not selection_gate, 'checkpoint_order')
-                # Offline verification: remote readback was performed at checkpoint time only.
+                # The owner can recompute this journal's hash chain. It is not a
+                # publication receipt: independently re-read origin on every verify.
+                # Unavailable remotes block readiness; there is no offline bypass.
                 raw = read(self.folder / (e['kind'] + '.public.json'))
                 require(raw == self.descriptor_bytes(e['kind']) and digest(raw) == e['descriptor_sha256'], 'descriptor_changed')
-                require(git(Path(self.config['repo']), 'show', e['commit'] + ':' + e['path']) == raw, 'checkpoint_blob_changed')
+                self.check_git_checkpoint(e)
                 if e['kind'] == 'plan': plan_gate = True
                 else: selection_gate = True
             elif kind == 'start':
@@ -503,12 +513,34 @@ class Runner:
                 'attempts': [e for e in self.events if e['event'] in ('start', 'child', 'end')],
                 'limitations': ['OOS exposed; not independent validation', 'No acquisition or scheduling',
                                 'Parameter sensitivity is the preregistered finite comparison only'],
-                'tracking_issue': self.plan['tracking_issue']}
+                'tracking_issue': self.plan['tracking_issue'],
+                'next_experiment': self.plan['next_experiment']}
 
     def lessons_value(self):
-        return {'set_id': self.set_id, 'conclusion': self.evaluation_value()['conclusion'],
-                'lesson': 'Apply preregistered policy only; exposed OOS is not an independent holdout.',
-                'next_experiment': 'Preregister a new date and new data window before further tuning.',
+        selection = self.selection_value(); evaluation = self.evaluation_value()
+        ranking = {item['run_id']: item for item in selection['ranking']}
+        attempts = {start['candidate_id']: start['run_id'] for start in self.starts()
+                    if self.ends().get(start['run_id'], {}).get('status') == 'ok'}
+        candidates = []
+        for row in self.successes():
+            rid = row['id']; observations = {}
+            for market, metrics in row['markets'].items():
+                is_sharpe = metrics['is']['sharpe']; oos_sharpe = metrics['oos']['sharpe']
+                observations[market] = {
+                    'sharpe_vs_is': 'lower' if oos_sharpe < is_sharpe else 'higher' if oos_sharpe > is_sharpe else 'equal',
+                    'sharpe_positive': oos_sharpe > 0,
+                    'excess_cagr_nonnegative': metrics['oos']['excess_cagr'] >= 0}
+            candidates.append({'candidate_id': rid, 'run_id': attempts[rid],
+                'selected': rid == selection['selected_run_id'],
+                'metrics_is': {m: v['is'] for m, v in row['markets'].items()},
+                'is_means': {k: v for k, v in ranking[rid].items() if k != 'run_id'},
+                'metrics_oos': {m: v['oos'] for m, v in row['markets'].items()},
+                'oos_observations': observations})
+        return {'set_id': self.set_id, 'holdout_status': 'exposed',
+                'conclusion': evaluation['conclusion'], 'candidates': candidates,
+                'evaluation': evaluation,
+                'lesson': 'Selection used preregistered IS means only. These private OOS observations are exposed, not independent validation.',
+                'next_experiment': self.plan['next_experiment'],
                 'tracking_issue': self.plan['tracking_issue']}
 
     def recover(self):
@@ -566,15 +598,13 @@ class Runner:
         with os.fdopen(os.open(trial / 'stdout.log', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stdout, \
              os.fdopen(os.open(trial / 'stderr.log', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stderr:
             try:
-                child = self.launch(command, cwd=self.config['repo'], env=env, stdin=subprocess.DEVNULL,
-                                    stdout=stdout, stderr=stderr, start_new_session=True, pass_fds=(self.fd,))
+                child = OwnedTrial(self.launch, command, timeout=min(TRIAL_TIMEOUT, remaining),
+                                   cwd=self.config['repo'], env=env, stdin=subprocess.DEVNULL,
+                                   stdout=stdout, stderr=stderr, pass_fds=(self.fd,))
                 self.append({'event': 'child', 'run_id': rid, 'pid': child.pid,
                              'host': socket.gethostname(), 'executable_sha256': self.plan['binary_sha256']})
-                rc = child.wait(timeout=min(TRIAL_TIMEOUT, remaining))
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                terminate_child(child)
-                rc = child.returncode
+                rc = child.wait()
+                timed_out = child.timed_out
             except BaseException:
                 if child is not None: terminate_child(child)
                 raise
@@ -616,17 +646,93 @@ class Runner:
 TRIAL_TIMEOUT = 300
 
 
+class OwnedTrial:
+    """A live session leader cleans its OWN group, even after worker SIGKILL.
+
+    macOS Python lacks waitid(WNOWAIT). A forked, fixed supervisor instead
+    retains group ownership until cleanup; the parent never signals a saved PID.
+    Only the Python test API can inject launch. The CLI still launches the pinned
+    native binary, with no command/helper option exposed to users.
+    """
+    def __init__(self, launch, command, *, timeout, **kwargs):
+        self.report, report_write = os.pipe()
+        control_read, self.control = os.pipe()
+        self.returncode = None; self.timed_out = False; self.reaped = False
+        try:
+            self.pid = os.fork()
+        except BaseException:
+            for fd in (self.report, report_write, control_read, self.control): os.close(fd)
+            raise
+        if self.pid == 0:
+            os.close(self.report); os.close(self.control)
+            self.supervise(launch, command, timeout, kwargs, report_write, control_read)
+            os._exit(125)
+        os.close(report_write); os.close(control_read)
+
+    @staticmethod
+    def supervise(launch, command, timeout, kwargs, report, control):
+        import select
+        # No group signal is used unless setsid succeeded in this very process.
+        try: os.setsid()
+        except BaseException: os._exit(125)
+        value = {'error': True}
+        try:
+            deadline = time.monotonic() + timeout
+            child = launch(command, start_new_session=False, **kwargs)
+            # Caught handlers reset to default on exec; the engine does not
+            # inherit SIG_IGN. Only the supervisor ignores group TERM cleanup.
+            signal.signal(signal.SIGTERM, lambda *_: None)
+            cancel = False; timed_out = False
+            while child.poll() is None:
+                timed_out = time.monotonic() >= deadline
+                if timed_out or cancel: break
+                if control is not None and select.select([control], [], [], .02)[0]:
+                    message = os.read(control, 1)
+                    if message: cancel = True
+                    else:
+                        # A killed parent is not a cancellation: finish the owned
+                        # engine, still bounded by the original absolute deadline.
+                        os.close(control); control = None
+                elif control is None: time.sleep(.02)
+            if child.returncode is None:
+                os.killpg(os.getpgrp(), signal.SIGTERM)
+                time.sleep(.2)
+                rc = child.poll()
+                if rc is None: rc = -signal.SIGKILL
+            else: rc = child.returncode
+            value = {'exit_code': rc, 'timeout': timed_out}
+        except BaseException:
+            pass
+        finally:
+            try: os.write(report, encode(value))
+            except OSError: pass  # parent may already be dead
+            # This PID is still alive and is its own group leader. There is no
+            # poll/reap/PID-recycling gap, including on normal native exit.
+            os.killpg(os.getpgrp(), signal.SIGKILL)
+            os._exit(125)
+
+    def wait(self):
+        if not self.reaped:
+            os.waitpid(self.pid, 0)
+            self.reaped = True
+            try:
+                raw = os.read(self.report, 4096)
+                value = json.loads(raw)
+                require(not value.get('error'), 'engine_launch_failed')
+                self.returncode = value['exit_code']; self.timed_out = value['timeout']
+            finally:
+                os.close(self.report); os.close(self.control)
+        return self.returncode
+
+    def stop(self):
+        if not self.reaped:
+            try: os.write(self.control, b's')
+            except BrokenPipeError: pass
+            self.wait()
+
+
 def terminate_child(child):
-    # Only the Popen-owned, unreaped child/process group created in this invocation.
-    if child.poll() is None:
-        try: os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError: pass
-        # Keep the leader unreaped until the group is killed: its PID cannot be
-        # recycled, and descendants ignoring TERM cannot retain our inherited lock.
-        time.sleep(.2)
-        try: os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
-        child.wait(timeout=5)
+    child.stop()
 
 
 

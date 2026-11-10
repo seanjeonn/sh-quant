@@ -79,7 +79,18 @@ def _audit_legacy_ema(public, private):
     plan = _decode(raw_plan)
     _require(plan['schema_version'] == 1 and plan['set_id'] == '2026-11-10_ema_cross' and plan['engine_commit'] == LEGACY_ENGINE)
     _require(plan['selection'] == LEGACY_SELECTION and plan['evaluation'] == LEGACY_EVALUATION, 'unsupported legacy policy')
-    machine = dict(plan, schema_version=2, machine_policy=dict(POLICY))
+    raw_evaluation = _read(private/'evaluation.json')
+    _require(_sha(raw_evaluation) == LEGACY_HASHES['evaluation'], 'evaluation hash mismatch')
+    evaluation = _decode(raw_evaluation)
+    # Read-only schema adapter, NOT retrospective preregistration. The immutable
+    # v1 plan has no next_experiment. Its hash-pinned private evaluation supplies
+    # the exact follow-up text; the reason records provenance, not an invented
+    # historical scientific rationale. Never rewrite either historical artifact.
+    follow_up = evaluation.get('next_experiment')
+    _require(isinstance(follow_up, str), 'missing legacy next experiment')
+    machine = dict(plan, schema_version=2, machine_policy=dict(POLICY),
+                   next_experiment=dict(hypothesis=follow_up,
+                       reason='Follow-up recorded in the hash-pinned historical evaluation: ' + follow_up))
     validate_plan(machine)
     candidates = [plan['baseline']] + plan['variants']
     _require(len(candidates) == 4, 'legacy trial count mismatch')
@@ -132,9 +143,6 @@ def _audit_legacy_ema(public, private):
         row = rows[ranking['run_id']]
         expected_rank.append(dict(run_id=row['id'], metrics_is={m:row['markets'][m]['is'] for m in ('US', 'KR')}, mean_sharpe=ranking['mean_is_sharpe'], mean_cagr=ranking['mean_is_cagr'], mean_mdd=ranking['mean_is_mdd']))
     _require(private_selection['ranked_is_candidates'] == expected_rank, 'ranking evidence mismatch')
-    raw_evaluation = _read(private/'evaluation.json')
-    _require(_sha(raw_evaluation) == LEGACY_HASHES['evaluation'], 'evaluation hash mismatch')
-    evaluation = _decode(raw_evaluation)
     computed = evaluate_candidate(machine, entries, rid)
     _require(evaluation['status'] == 'completed' and evaluation['conclusion'] == computed['conclusion'] and evaluation['criteria_evidence'] == computed['criteria_evidence'], 'evaluation claim mismatch')
     _require(evaluation['selected_run_id'] == rid and evaluation['baseline_run_id'] == ids[0] and evaluation['set_id'] == plan['set_id'])
@@ -186,14 +194,95 @@ def _json_finite(value):
         _require(value is None or type(value) in (str, bool, int))
 
 
-def _semantic_parameters(value):
-    if isinstance(value, dict):
-        return ('object', tuple((k, _semantic_parameters(v)) for k, v in sorted(value.items())))
-    if isinstance(value, list):
-        return ('array', tuple(_semantic_parameters(v) for v in value))
-    if type(value) in (int, float):
-        return ('number', _number(value))
-    return (type(value).__name__, value)
+def _normalized_signal(signal):
+    """Syntax-only identity for the existing expr.rs grammar; never evaluate.
+
+    Ignore whitespace outside strings, redundant grouping and decimal numeric
+    spelling. Preserve operator order/grouping and string contents. This is NOT
+    symbolic/behavioral equivalence: no algebra, constant folding, commutative
+    reordering or ref resolution. The engine remains the authority for function
+    names, arity and execution; this only validates expression syntax for dedup.
+    """
+    tokens, pos = [], 0
+    pattern = re.compile(r'\s+|[0-9.]+|[A-Za-z_][A-Za-z_0-9]*|"[^"]*"|[<>!=]=|[<>+*/(),-]')
+    while pos < len(signal):
+        match = pattern.match(signal, pos)
+        if match is None:
+            raise ContractError('invalid executable signal syntax')
+        token = match.group()
+        pos = match.end()
+        if not token.isspace():
+            tokens.append(token)
+    index = 0
+
+    def peek():
+        return tokens[index] if index < len(tokens) else None
+
+    def take():
+        nonlocal index
+        token = peek()
+        if token is None:
+            raise ContractError('invalid executable signal syntax')
+        index += 1
+        return token
+
+    def expect(token):
+        _require(take() == token, 'invalid executable signal syntax')
+
+    def expression(level=0):
+        # Exactly the engine precedence, including `not` below comparisons.
+        if level in (0, 1, 3, 4):
+            operators = {0: ('or',), 1: ('and',), 3: ('+', '-'), 4: ('*', '/')}[level]
+            left = expression(level + 1)
+            while peek() in operators:
+                left = ('bin', take(), left, expression(level + 1))
+            return left
+        if level == 2:
+            if peek() == 'not':
+                take()
+                return ('not', expression(2))
+            left = expression(3)
+            if peek() in ('<', '>', '<=', '>=', '==', '!='):
+                return ('bin', take(), left, expression(3))
+            return left
+        if level == 5:
+            if peek() == '-':
+                take()
+                return ('neg', expression(5))
+            return expression(6)
+        token = take()
+        if token == '(':
+            node = expression()
+            expect(')')
+            return node
+        if re.fullmatch(r'[0-9.]+', token):
+            # The engine parses decimal literals as f64 (no exponent syntax).
+            _require(re.fullmatch(r'(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', token) is not None,
+                     'invalid executable signal syntax')
+            return ('number', _number(float(token)))
+        if token.startswith('"'):
+            return ('string', token[1:-1])
+        _require(re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', token) is not None,
+                 'invalid executable signal syntax')
+        if peek() != '(':
+            return ('var', token)
+        take()
+        args = []
+        if peek() != ')':
+            args.append(expression())
+            while peek() == ',':
+                take()
+                args.append(expression())
+        expect(')')
+        return ('call', token, tuple(args))
+
+    try:
+        node = expression()
+        _require(index == len(tokens), 'invalid executable signal syntax')
+        hash(node)
+        return node
+    except RecursionError:
+        raise ContractError('executable signal nesting too deep') from None
 
 
 def validate_plan(plan):
@@ -208,6 +297,20 @@ def validate_plan(plan):
     _require(plan.get('timezone') == 'Asia/Seoul' and plan.get('markets') in (['US', 'KR'], ['KR', 'US']))
     _require(plan.get('holdout_status') == 'exposed')
     _require(isinstance(plan.get('hypothesis'), str) and plan['hypothesis'].strip())
+    next_experiment = plan.get('next_experiment')
+    _require(isinstance(next_experiment, dict), 'missing concrete next experiment')
+    for field in ('hypothesis', 'reason'):
+        text = next_experiment.get(field)
+        _require(isinstance(text, str) and len(text.strip()) >= 20,
+                 'missing concrete next experiment')
+        # Mechanical floor, not a claim to judge scientific merit. Reject known
+        # template markers and the old runner's generic operational placeholder.
+        _require(not re.search(r'\b(?:todo|tbd|placeholder)\b|<[^>]+>|\{[^}]+\}', text, re.I)
+                 and not re.fullmatch(r'\s*(?:(?:null|none|n/?a)[\s.,;:!-]*)+', text, re.I)
+                 and not re.fullmatch(r'\s*(?:insert|write|describe)\s+(?:the\s+)?(?:next\s+)?(?:hypothesis|reason|experiment)\s+here[.!]?\s*', text, re.I)
+                 and text.strip().casefold() !=
+                 'preregister a new date and new data window before further tuning.',
+                 'placeholder next experiment')
     issue = plan.get('tracking_issue')
     _require(isinstance(issue, str) and re.fullmatch(r'https://github\.com/seanjeonn/sh-quant/issues/[1-9][0-9]*', issue))
     for field, length in [('engine_commit', 40), ('cargo_lock_sha256', 64), ('binary_sha256', 64), ('data_manifest_sha256', 64)]:
@@ -224,7 +327,7 @@ def validate_plan(plan):
         _require(rid not in ids)
         ids.add(rid)
         _require(isinstance(params, dict) and isinstance(signal, str) and signal.strip())
-        signature = (_semantic_parameters(params), re.sub(r'\s+', '', signal))
+        signature = _normalized_signal(signal)
         _require(signature not in semantics, 'duplicate candidate semantics')
         semantics.add(signature)
     budget = plan.get('budget')

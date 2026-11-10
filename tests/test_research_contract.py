@@ -4,14 +4,18 @@ import unittest
 import json
 import hashlib
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 from tools import research_contract as c
 
 
-def plan():
+def plan() -> dict[str, Any]:
     sid = '2026-11-10_synthetic'
     return dict(schema_version=2, set_id=sid, timezone='Asia/Seoul', markets=['US', 'KR'],
                 hypothesis='Synthetic hypothesis', tracking_issue='https://github.com/seanjeonn/sh-quant/issues/30',
+                next_experiment=dict(
+                    hypothesis='Test whether a five-bar close filter reduces synthetic turnover.',
+                    reason='The current threshold rule does not constrain rapid position changes.'),
                 engine_commit='a'*40, cargo_lock_sha256='b'*64, binary_sha256='c'*64,
                 data_manifest_sha256='d'*64, holdout_status='exposed',
                 machine_policy=dict(selection='mean_is_sharpe_v1', evaluation='sharpe_excess_mdd_v1'),
@@ -85,12 +89,13 @@ class ContractTests(unittest.TestCase):
     def test_synthetic_legacy_audit_recomputes_and_detects_tampering(self):
         # In-memory synthetic legacy evidence. Trust anchors are explicitly
         # replaced; this fixture cannot attest to historical market results.
-        p = plan(); p.update(schema_version=1, set_id='2026-11-10_ema_cross', engine_commit=c.LEGACY_ENGINE)
+        p = plan(); next_experiment = p.pop('next_experiment')
+        p.update(schema_version=1, set_id='2026-11-10_ema_cross', engine_commit=c.LEGACY_ENGINE)
         for candidate in [p['baseline']]+p['variants']:
             candidate['run_id'] = candidate['run_id'].replace('synthetic', 'ema_cross')
         fourth = copy.deepcopy(p['variants'][-1]); fourth.update(run_id=p['set_id']+'__v004', parameters={'n':4}, signal='close > 4'); p['variants'].append(fourth)
         p['selection'] = copy.deepcopy(c.LEGACY_SELECTION); p['evaluation'] = copy.deepcopy(c.LEGACY_EVALUATION)
-        mp = copy.deepcopy(p); mp['schema_version'] = 2
+        mp = copy.deepcopy(p); mp.update(schema_version=2, next_experiment=next_experiment)
         e = entries(mp); selected = c.select_candidate(mp, e); evaluated = c.evaluate_candidate(mp, e, selected['selected_run_id'])
         data = {}
         def put(path, value, raw=False):
@@ -118,13 +123,19 @@ class ContractTests(unittest.TestCase):
         put('public/selection.json', public_selection)
         candidates = [dict(run_id=r['id'], parameters=v['parameters'], markets=r['markets'], is_mean_sharpe='1', oos_mean_sharpe='1') for v,r in zip([p['baseline']]+p['variants'],e)]
         ev = dict(evaluated, set_id=p['set_id'], status='completed', selected_run_id=selected['selected_run_id'], baseline_run_id=p['baseline']['run_id'], selection_commit=c.LEGACY_SELECTION_COMMIT, preregistration_commit=c.LEGACY_PREREG, engine_commit=p['engine_commit'], data_manifest_sha256=p['data_manifest_sha256'], holdout_status='exposed', all_candidates=candidates)
+        ev['next_experiment'] = next_experiment['hypothesis']
         hashes = dict(plan=plan_hash, evaluation=put('private/evaluation.json', ev), private_report=put('private/report.md', b'SYNTHETIC report', True), public_report=put('public/report-toss-completed.md', b'SYNTHETIC report', True))
         original = copy.deepcopy(data)
         def read(path):
             try: return data[str(path)]
             except KeyError: raise c.ContractError('missing synthetic evidence') from None
-        with patch.object(c, '_read', side_effect=read), patch.object(c, '_git_blob', side_effect=lambda commit, name: original['public/'+name]), patch.object(c, 'LEGACY_HASHES', hashes):
+        with patch.object(c, '_read', side_effect=read), patch.object(c, '_git_blob', side_effect=lambda commit, name: original['public/'+name]), patch.object(c, 'LEGACY_HASHES', hashes), patch.object(c, 'validate_plan', wraps=c.validate_plan) as validate:
             result = c.audit_legacy_ema('public', 'private')
+            adapted = validate.call_args_list[0].args[0]
+            self.assertNotIn('next_experiment', p)
+            self.assertEqual(adapted['next_experiment'], dict(
+                hypothesis=ev['next_experiment'],
+                reason='Follow-up recorded in the hash-pinned historical evaluation: ' + ev['next_experiment']))
             self.assertEqual(result['status'], 'completed'); self.assertEqual(result['conclusion'], 'accept')
             self.assertEqual(data, original)
             for target in ('private/results/index.json', 'private/logs/'+e[0]['id']+'.stdout', 'private/evaluation.json', 'public/plan.json'):
@@ -143,10 +154,76 @@ class ContractTests(unittest.TestCase):
             e[1]['markets'][m]['is']['sharpe'] = '1e1000000'
         self.assertEqual(c.select_candidate(p, e)['selected_run_id'], e[1]['id'])
 
+    def test_identical_executable_signals_rejected_despite_different_parameters(self):
+        p = plan()
+        p['variants'][0]['signal'] = p['baseline']['signal']
+        self.assertNotEqual(p['variants'][0]['parameters'], p['baseline']['parameters'])
+        with self.assertRaisesRegex(c.ContractError, 'duplicate candidate'):
+            c.validate_plan(p)
+
+    def test_normalized_signal_duplicates_ignore_only_executable_syntax_noise(self):
+        baseline = 'ema(close, 20) > ema(close, 60)'
+        duplicates = [
+            ' ema ( close , 20 ) > ema ( close , 60 ) ',
+            '((ema((close), (20))) > (ema(close, 60)))',
+            'ema(close, 020.00) > ema(close, 60.0)',
+        ]
+        for signal in duplicates:
+            with self.subTest(signal=signal):
+                p = plan(); p['baseline']['signal'] = baseline
+                p['variants'][0]['signal'] = signal
+                with self.assertRaisesRegex(c.ContractError, 'duplicate candidate'):
+                    c.validate_plan(p)
+        # No arbitrary algebra, ref resolution, commutativity or behavioral
+        # equivalence claim: only identical normalized expression trees.
+        for signal in ('ema(close, 20) + 0 > ema(close, 60)',
+                       'ema(close, 60) < ema(close, 20)',
+                       'ema(close, 21) > ema(close, 60)'):
+            p = plan(); p['baseline']['signal'] = baseline
+            p['variants'][0]['signal'] = signal
+            self.assertEqual(c.validate_plan(p), p)
+
+    def test_normalized_signal_validation_preserves_structure_and_string_contents(self):
+        p = plan()
+        p['baseline']['signal'] = 'close - (2 - 1)'
+        p['variants'][0]['signal'] = '(close - 2) - 1'
+        p['variants'][1]['signal'] = 'ref("id with spaces")'
+        self.assertEqual(c.validate_plan(p), p)
+        p['variants'][0]['signal'] = 'ref("idwithspaces")'
+        self.assertEqual(c.validate_plan(p), p)
+        for signal in ('close >', '(close > 2', 'close > 1 garbage',
+                       'close > 1e2', '__import__("os").system("bad")'):
+            p['variants'][0]['signal'] = signal
+            with self.subTest(signal=signal), self.assertRaises(c.ContractError):
+                c.validate_plan(p)
+
     def test_numeric_parameter_spellings_are_not_distinct_variants(self):
         p = plan()
         p['variants'][0].update(parameters={'n': 1.0}, signal='close > 1')
         with self.assertRaises(c.ContractError): c.validate_plan(p)
+
+    def test_next_experiment_requires_concrete_hypothesis_and_reason(self):
+        p = plan()
+        del p['next_experiment']
+        with self.assertRaises(c.ContractError): c.validate_plan(p)
+        for value in (None, '', 'RSI thresholds need study', {},
+                      {'hypothesis': 'Test a five-bar momentum filter.'},
+                      {'reason': 'The current rule lacks a turnover constraint.'}):
+            p = plan(); p['next_experiment'] = value
+            with self.subTest(value=value), self.assertRaises(c.ContractError):
+                c.validate_plan(p)
+        for field in ('hypothesis', 'reason'):
+            for value in (None, 123, '', ' ' * 30, 'Short next step',
+                          'TODO: write the next experiment here',
+                          'TBD ' * 10, '<insert concrete experiment here>',
+                          'placeholder for the next hypothesis',
+                          'Insert next hypothesis here', 'null ' * 10,
+                          'Preregister a new date and new data window before further tuning.'):
+                p = plan(); p['next_experiment'][field] = value
+                with self.subTest(field=field, value=value), self.assertRaises(c.ContractError):
+                    c.validate_plan(p)
+        p = plan()
+        self.assertEqual(c.validate_plan(p)['next_experiment'], p['next_experiment'])
 
     def test_reject_invalid_plan_fields(self):
         cases = [('schema_version', 1), ('set_id', '2026-02-30_bad'),

@@ -30,6 +30,10 @@ python3 -m http.server 8787
 - 채택(`accept`), 보류(`defer`), 기각(`reject`) 모두 근거가 있으면 정상 완료다. 실행·데이터·예산 부족은 `blocked`이며 완료로 세지 않는다.
 - 현재 CLI는 모든 실행에서 IS/OOS를 함께 노출한다. OOS를 최적화에 쓰지 않고 `holdout_status: exposed`로 고지한다. 독립 holdout이 구현됐다고 주장하지 않는다.
 
+## 단계별 실행·재개·검증
+
+`tools/research_set.py`의 `init`, `descriptor`, `checkpoint`, `step`, `verify`, `status`로 private registry의 한 세트를 단계별 처리한다. [운영·복구 계약](docs/research-runner.md)을 읽고 `--help`를 확인한다. 사전등록과 선택의 정확한 원격 Git checkpoint가 없으면 다음 단계로 진행하지 않는다. schema2의 검증된 machine policy만 지원하며 임의 기준/명령을 실행하지 않는다. 기존 완료 세트는 재실행하지 않는다. 이 실행기를 구현한 사실은 cron이 활성화됐다는 뜻이 아니다.
+
 ## 구조
 
 - `src/`: Rust 엔진. **연구 모드에서 수정 금지**. 승인된 엔진 개선은 이슈·별도 개발 브랜치·테스트·리뷰로 수행한다.
@@ -54,4 +58,4 @@ python3 -m http.server 8787
 3. 작업 디렉터리는 저장소 루트로 설정해 `AGENTS.md`가 로드되게 한다. 실행 환경은 `TZ=Asia/Seoul`로 통일한다.
 4. 규칙·데이터 고정·수동 1세트 검증 후 별도 작업으로 매일 연구/주간 개선의 스케줄과 실행 예산을 설정한다. 과거의 07:00 예시는 활성 일정이 아니다.
 
-**#26은 토스 data-only 준비와 frozen 입력/private 결과만 연결한다. 연구 실행기·IS-only 스윕·완료 판정기·cron은 구현하거나 등록하지 않는다.** 수동 연구 프로토콜을 따르고 필수 데이터 준비/고정을 만족할 수 없으면 blocked로 기록한다. 더 넓은 실행·검증 도구는 #20, 예약 자동화는 #21, IS-only 스윕은 #16에서 추적한다. GitHub 작업 범위는 [워크플로](docs/github-workflow.md)를 따른다.
+**#26은 토스 준비/frozen/private 경로, #30은 제한된 단계 실행·재개·완료 검증을 구현한다. IS-only sweep·sealed holdout·예약 운영은 별개다.** 데이터/증거 조건이 충족되지 않으면 blocked로 기록한다. 더 넓은 실행 도구는 #20, 예약 자동화는 #21, IS-only 스윕은 #16에서 추적한다. GitHub 작업 범위는 [워크플로](docs/github-workflow.md)를 따른다.

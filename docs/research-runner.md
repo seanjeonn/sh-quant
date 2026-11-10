@@ -49,6 +49,23 @@ baseline과 최소2개 의미 있는 변형, 모든 사전등록 후보, US/KR �
 
 예약은 #30의 end-to-end/강제종료복구/증거 검증과 독립 리뷰 이후에 연결한다. #21에서 일일 KST 시작/마감, 휴장일 정책, 주간 backlog 검토, API/turn/time 예산, 보고 채널을 명시하고 paused canary부터 등록한다. 실제1회 호출·산출물·전달 read-back이 통과해야 recurring을 활성화한다. 성공/실패를 구분하고 원시 데이터/집계 수치 공개는 #28의 확인 전 계속 제한한다. PC sleep/재부팅/공인 IP변경/403/토큰충돌은 숨기지 않고 차단·알림으로 처리한다.
 
+## 리뷰 수정과 완료 해석
+
+#31의 배포 전 재현 문제를 고친다: 실제 실행 expression tree가 같으면 parameters metadata가 달라도 변형으로 인정하지 않는다(공백·중복 괄호·동일 숫자 표기 정규화; 임의 대수적 동치까지 판별한다는 주장은 아님). 루트 build.rs/Cargo/toolchain 입력은 미추적 파일의 생성·삭제도 동결한다. checkpoint 검증은 현재 origin/허용 branch/조상/정확 blob을 다시 확인하며 원격이 불가하면 준비 완료로 보고하지 않는다. journal hash chain은 자체 변조 탐지용이지 외부 관측에 대한 인증 서명이 아니다.
+
+macOS Python에는 waitid(WNOWAIT)가 없어 고정 fork supervisor가 자기 session/process group 소유권을 유지한다. 정상·타임아웃·취소·부모 강제종료 후에도 deadline 안에서 자기 그룹을 정리하고 native exit code는 통제된 pipe로 전달한다. 임의 cached PID에 signal을 보내지 않는다. 의도적으로 새 session으로 탈출하는 악성 native descendant까지 격리하는 sandbox가 아니며, 허용된 fingerprint의 Rust 엔진만 실행한다.
+
+schema2는 `hermes/templates/runner-plan.json`의 빈 양식부터 시작하되 모든 TODO/null을 실제 값으로 채워야 한다. `next_experiment.hypothesis/reason`은 구체적 내용과 길이 검사를 통과해야 한다. private lessons는 실제 후보별 run ID/선택 상태/IS 평균·지표/OOS 관찰과 고정 판정 근거를 보존한다. generic next-step 문구 하나만으로 연구가 완주됐다고 보고하지 않는다. 이 보강 후 부모가 Python79개 및 Rust20개(하위 helper1개 ignored) 통과를 재확인했다. 최종 native canary와 재검토는 별도 기록한다.
+
+## 실제 검증 기록 (2026-11-10, 최종 독립검토 전)
+
+- Rust 테스트20개 통과; ignored1개는 실제 SIGKILL 테스트가 호출하는 하위 프로세스 holder helper다. 기존 백테스트/신호/비용/split 파일은 변경하지 않았다.
+- Python 전체67개 통과. lifecycle 테스트는 실제 subprocess 강제종료/재개, inherited lock에 의한 살아 있는 orphan 배제, timeout 그룹 정리, 성공 결과 commit 이후 end 이벤트 전 중단 복구, 위조 완료/변조 거부를 포함한다.
+- 기존 실제 EMA 세트는 새 `audit_legacy_ema`로 읽기 전용 감사해 동일 `completed/defer`와 선택 ID를 확인했다. 시장 데이터/전략 실행을 반복하지 않았다.
+- 실제 release Rust binary를 사용한 별도 **SYNTHETIC native canary**를 실행했다.24개 명시적 synthetic 시계열, 후보3개가 실제 엔진을 통과했다. disposable 로컬 Git remote에서 plan과 selection의 정확한 blob checkpoint를 검증하고 단계 상태가 `await_plan_checkpoint → ready_trial → await_selection_checkpoint → ready_evaluate → ready_finalize → completed`로 진행했다. 최종 verify 및 completed 재호출 시 추가 trial 없음도 확인했다.
+- 이 canary의 시장 API/자격증명/GitHub 쓰기는0회다. synthetic 지표는 연구 성과로 게시하지 않는다. 로그/fixture/로컬 Git checkpoint/검증 보고서는 private에 보존한다. 실제 canary와 mock-engine/kill 테스트는 검증 종류가 다르며 서로 대체하지 않는다.
+- 최초 staged 공백 검사에서 새 파일 EOF blank line을 발견해 제거한 뒤 commit했다. 독립 검토 지적이 생기면 동일한 원칙으로 증거를 보존하며 수정한다.
+
 ## 검증 명령
 
 ```text

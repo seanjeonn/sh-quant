@@ -62,6 +62,9 @@ class Fixture(unittest.TestCase):
             {'path': self.csv.name, 'sha256': hashlib.sha256(self.csv.read_bytes()).hexdigest()}]})
         from test_research_contract import plan
         self.plan = plan()
+        self.plan['next_experiment'] = {
+            'hypothesis': 'A separately preregistered longer signal window may reduce synthetic turnover.',
+            'reason': 'Compare an untouched later window because the current synthetic OOS is already exposed.'}
         day = dt.datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
         old = self.plan['set_id']; self.plan['set_id'] = day + '_synthetic'
         for c in [self.plan['baseline'], *self.plan['variants']]: c['run_id'] = c['run_id'].replace(old, self.plan['set_id'])
@@ -104,6 +107,33 @@ class CheckpointTests(Fixture):
             self.assertEqual(runner.descriptor('plan'), data)
             with self.assertRaises(r.Blocked): runner.checkpoint('selection', self.plan['engine_commit'], 'origin', 'main', '../secret')
 
+    def test_forged_hash_chain_cannot_publish_local_checkpoint(self):
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id']) as runner:
+            descriptor = runner.descriptor('plan')
+            # An ancestor exists remotely, but the descriptor's descendant is unpublished.
+            git(self.repo, 'push', 'origin', 'HEAD:refs/heads/research/synthetic')
+            (self.repo / 'plan.json').write_bytes(descriptor)
+            git(self.repo, 'add', 'plan.json'); git(self.repo, 'commit', '-m', 'unpublished descriptor')
+            commit = git(self.repo, 'rev-parse', 'HEAD')
+            evidence = dict(event='checkpoint', kind='plan', commit=commit, remote='origin',
+                            branch='research/synthetic', path='plan.json', descriptor_sha256=r.digest(descriptor))
+            with self.assertRaises(r.Blocked): runner.check_git_checkpoint(evidence)
+            original = (runner.folder / 'events.jsonl').read_bytes()
+            for overrides in ({}, {'remote': 'NOT_ORIGIN'}, {'branch': 'main'}):
+                with self.subTest(overrides=overrides):
+                    (runner.folder / 'events.jsonl').write_bytes(original)
+                    r.Runner.append_raw(runner.folder, dict(evidence, **overrides))
+                    runner.events = runner.read_events()
+                    with self.assertRaises(r.Blocked): runner.verify()
+
+    def test_verify_blocks_when_checkpoint_remote_is_unavailable(self):
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id']) as runner:
+            self.checkpoint(runner, 'plan')
+            self.remote.rename(self.base / 'unavailable.git')
+            with self.assertRaises(r.Blocked): runner.verify()
+
     def test_local_blob_without_remote_is_not_checkpoint(self):
         self.init()
         with r.Runner(self.registry, self.plan['set_id']) as runner:
@@ -138,6 +168,32 @@ class EngineFixture(Fixture):
 
 
 class LifecycleTests(EngineFixture):
+    def test_private_lessons_derive_each_candidate_and_use_preregistered_next_experiment(self):
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan')
+            for _ in range(4): runner.step()
+            self.checkpoint(runner, 'selection'); runner.step()
+            lessons = runner.lessons_value(); report = runner.report_value()
+            self.assertEqual(lessons['next_experiment'], self.plan['next_experiment'])
+            self.assertEqual(report['next_experiment'], self.plan['next_experiment'])
+            selection = runner.selection_value()
+            self.assertEqual(len(lessons['candidates']), 3)
+            for item, row in zip(lessons['candidates'], runner.successes()):
+                self.assertEqual(item['candidate_id'], row['id'])
+                self.assertEqual(item['run_id'], row['id'])
+                self.assertEqual(item['selected'], row['id'] == selection['selected_run_id'])
+                ranking = next(v for v in selection['ranking'] if v['run_id'] == row['id'])
+                self.assertEqual(item['is_means'], {k:v for k,v in ranking.items() if k != 'run_id'})
+                for market in ('US', 'KR'):
+                    self.assertEqual(item['metrics_is'][market], row['markets'][market]['is'])
+                    self.assertEqual(item['metrics_oos'][market], row['markets'][market]['oos'])
+                    self.assertEqual(item['oos_observations'][market]['sharpe_vs_is'], 'equal')
+                    self.assertTrue(item['oos_observations'][market]['excess_cagr_nonnegative'])
+            self.assertEqual(lessons['evaluation'], runner.evaluation_value())
+            runner.step()
+            self.assertEqual(runner.verify()['state'], 'completed')
+
     def test_bounded_steps_full_lifecycle_and_verify(self):
         self.init()
         for number in range(3):
@@ -199,9 +255,10 @@ from unittest import mock
 
 
 class ProcessTests(EngineFixture):
-    def worker(self, script):
+    def worker(self, script, timeout=None):
         code = ('import sys, subprocess; sys.path.insert(0, ' + repr(str(ROOT / 'tools')) + '); '
                 'import research_set as r; '
+                + (('r.TRIAL_TIMEOUT=' + repr(timeout) + '; ') if timeout is not None else '') +
                 'launch=lambda a,**kw: subprocess.Popen([sys.executable,' + repr(str(script)) + ',*a[1:]],**kw); '
                 '\nwith r.Runner(' + repr(str(self.registry)) + ',' + repr(self.plan['set_id']) + ',launch=launch) as runner: runner.step()')
         return subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -246,6 +303,110 @@ class ProcessTests(EngineFixture):
             self.assertEqual(runner.status()['attempt_count'], 2)
             self.assertTrue(runner.starts()[-1]['run_id'].endswith('__repair1'))
             self.assertEqual(len(runner.successes()), 1)
+
+    def test_normal_exit_cleans_term_ignoring_descendant_before_log_commit(self):
+        write(self.mock, b'''import os,signal,time,pathlib
+pid=os.fork()
+if pid==0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    pathlib.Path(__file__).with_suffix('.pid').write_text(str(os.getpid()))
+    while True:
+        os.write(1,b'descendant log write\\n')
+        time.sleep(.02)
+else:
+    while not pathlib.Path(__file__).with_suffix('.pid').exists(): time.sleep(.01)
+    os._exit(7)
+''')
+        self.init()
+        try:
+            with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+                self.checkpoint(runner, 'plan'); runner.step()
+                end = runner.ends()[runner.starts()[0]['run_id']]
+                self.assertEqual(end['exit_code'], 7)
+                trial, _ = runner.trial_paths(runner.starts()[0])
+                before = (trial / 'stdout.log').read_bytes()
+                time.sleep(.15)
+                self.assertEqual((trial / 'stdout.log').read_bytes(), before, 'descendant mutated committed log')
+            with r.Runner(self.registry, self.plan['set_id']) as runner: runner.verify()
+            pid = int(self.mock.with_suffix('.pid').read_text())
+            status = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+            self.assertFalse(status.returncode == 0 and 'Z' not in status.stdout, 'live descendant')
+        finally:
+            path = self.mock.with_suffix('.pid')
+            if path.exists():
+                try: os.kill(int(path.read_text()), signal.SIGKILL)
+                except ProcessLookupError: pass
+
+    def assert_orphan_group_releases_lock(self, leader_sleep, timeout):
+        write(self.mock, ('''import os,signal,time,pathlib
+pid=os.fork()
+if pid==0:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    pathlib.Path(__file__).with_suffix('.pid').write_text(str(os.getpid()))
+    while True:
+        os.write(1,b'orphan log write\\n')
+        time.sleep(.02)
+else:
+    time.sleep(''' + str(leader_sleep) + ')\n').encode())
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id']) as runner: self.checkpoint(runner, 'plan')
+        parent = self.worker(self.mock, timeout=timeout)
+        try:
+            self.wait_child()
+            deadline = time.monotonic() + 3
+            while not self.mock.with_suffix('.pid').exists() and time.monotonic() < deadline: time.sleep(.01)
+            self.assertTrue(self.mock.with_suffix('.pid').exists())
+            parent.kill(); parent.wait(timeout=3)
+            with self.assertRaises(r.Blocked):
+                with r.Runner(self.registry, self.plan['set_id']): pass
+            deadline = time.monotonic() + 4
+            while True:
+                try:
+                    with r.Runner(self.registry, self.plan['set_id']) as runner:
+                        runner.step()
+                        trial, _ = runner.trial_paths(runner.starts()[0])
+                        before = (trial / 'stdout.log').read_bytes()
+                        time.sleep(.1)
+                        self.assertEqual(before, (trial / 'stdout.log').read_bytes())
+                        self.assertEqual(runner.verify()['attempt_count'], 1)
+                    break
+                except r.Blocked as error:
+                    if str(error) != 'worker_busy' or time.monotonic() >= deadline: raise
+                    time.sleep(.03)
+            pid = int(self.mock.with_suffix('.pid').read_text())
+            status = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+            self.assertFalse(status.returncode == 0 and 'Z' not in status.stdout)
+        finally:
+            if parent.poll() is None: parent.kill(); parent.wait(timeout=3)
+            path = self.mock.with_suffix('.pid')
+            if path.exists():
+                try: os.kill(int(path.read_text()), signal.SIGKILL)
+                except ProcessLookupError: pass
+
+    def test_sigkill_parent_normal_engine_exit_cleans_descendant(self):
+        self.assert_orphan_group_releases_lock(leader_sleep=.8, timeout=3)
+
+    def test_sigkill_parent_supervisor_enforces_timeout_and_cleans_descendant(self):
+        self.assert_orphan_group_releases_lock(leader_sleep=30, timeout=.8)
+
+    def test_parent_exception_cancels_owned_group_via_control_pipe(self):
+        write(self.mock, b'import signal,time\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\ntime.sleep(30)\n')
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan')
+            append = runner.append; supervisor = []
+            def interrupt_after_launch(event):
+                append(event)
+                if event['event'] == 'child':
+                    supervisor.append(event['pid'])
+                    raise KeyboardInterrupt()
+            with mock.patch.object(runner, 'append', side_effect=interrupt_after_launch):
+                with self.assertRaises(KeyboardInterrupt): runner.step()
+            self.assertEqual(len(supervisor), 1)
+            with self.assertRaises(ProcessLookupError): os.kill(supervisor[0], 0)
+        with r.Runner(self.registry, self.plan['set_id']) as runner:
+            runner.step()
+            self.assertEqual(runner.ends()[runner.starts()[0]['run_id']]['status'], 'interrupted')
 
     def test_timeout_reaps_owned_child_and_concurrency_rejects(self):
         write(self.mock, b'import signal,time\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\ntime.sleep(30)\n')
@@ -384,6 +545,24 @@ else:
         (self.repo / 'src/main.rs').write_text('// changed synthetic engine')
         with self.assertRaises(r.Blocked): self.init()
         self.assertFalse(marker.exists(), 'Git executed an external shell helper')
+
+    def test_untracked_root_build_inputs_create_change_delete_block_verify(self):
+        self.init()
+        for name in ('build.rs', 'Cargo.toml', 'rust-toolchain.toml', 'rust-toolchain'):
+            path = self.repo / name
+            with self.subTest(name=name):
+                path.write_text('// new build input')
+                with self.assertRaises(r.Blocked):
+                    with r.Runner(self.registry, self.plan['set_id']) as runner: runner.verify()
+                path.unlink()
+        # Presence and content of initially untracked inputs must also be frozen.
+        build = self.repo / 'build.rs'; build.write_text('// original')
+        self.registry = self.base / 'registry_with_build'; self.init()
+        for contents in ('// modified', None):
+            if contents is None: build.unlink()
+            else: build.write_text(contents)
+            with self.assertRaises(r.Blocked):
+                with r.Runner(self.registry, self.plan['set_id']) as runner: runner.verify()
 
     def test_untracked_code_input_is_frozen(self):
         (self.repo / 'tools').mkdir()

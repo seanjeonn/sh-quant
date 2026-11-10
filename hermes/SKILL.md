@@ -50,6 +50,8 @@ cargo run --release --locked -q -- lesson <new-id> "<교훈>" --output-dir <abso
 
 ## Procedure
 
+schema2 상태 실행기를 사용할 때는 `docs/research-runner.md`와 `python3 tools/research_set.py --help`를 먼저 확인한다. private registry에 고정 plan/engine/data를 등록하고 plan descriptor의 원격 commit checkpoint 후 `step`을 실행한다. selection descriptor도 commit/push/checkpoint한 다음 평가한다. `verify`의 실제 증거 재계산이 통과하기 전에는 완료로 표시하지 않는다. 지원하는 machine policy 외의 임의 기준은 문자열을 실행하지 말고 별도 승인된 개발로 버전 확장한다. `next_experiment`는 구체적인 가설·이유를 담고, 변형은 metadata가 아니라 실제 실행 signal이 달라야 한다. 영구 잠금 파일의 존재와 활성 kernel lock 소유권을 혼동하거나 unknown PID/파일을 지워 복구하지 않는다. 모델/일정은 runtime 도움말의 실제 한도를 확인한 뒤 별도 예약 canary로 검증한다.
+
 1. **시작·중복 방지.** KST 날짜와 `research/<date>_*`의 원격 PR/로컬 상태를 확인한다. 완료 세트가 있으면 그날 새 세트를 만들지 않는다. 진행/차단 세트는 기록된 상태에서 재개한다. 동시 실행을 금지하고 전용 브랜치를 사용한다. 강제 reset/rebase/push로 다른 작업을 덮어쓰지 않는다.
 2. **가설 선정.** 과거 보고서의 기각/실패·교훈과 `backlog.md`를 읽는다. 미완료 큐의 첫 실행 가능한 가설을 우선하며, 다른 가설을 고르면 이유를 기록한다. 큐가 비면 중복되지 않는 가설을 자율 생성한다. 과거 OOS 결과를 참고했다면 노출 이력도 적고 새 실험을 독립적인 미관측 검증이라고 부르지 않는다. 출력: 가설과 선정 이유.
 3. **데이터 준비·추적·사전 계획.** 먼저 필요한 일봉 캐시를 확보·검증하고 파일 해시·대상·기간·수집 기준시각·snapshot 위치를 manifest에 확정한다. 토스는 별도 준비 도구와 frozen manifest를 사용하며, Yahoo 캐시가 없거나 어느 공급자든 고정/품질을 충족할 수 없으면 `data_setup`으로 차단하고 별도 준비 작업을 선행한다. 중복을 검색한 뒤 feature 양식으로 오늘 연구의 추적 이슈를 만든다. `hermes/templates/plan.json`을 복사해 `research/<set-id>/plan.json`의 모든 TODO/null을 실제 값으로 채운다. `write_file`/`patch`를 사용한다. baseline, 최소 2개 변형, 탐색 범위, IS 선택/동점 기준, 평가·채택/보류/기각 기준, 실행 수·시간 상한, 종료 조건, 확정된 데이터/엔진 provenance를 **첫 전략 실행 전에 커밋하고 작업 브랜치에 push**한다. 선택 기준은 OOS를 사용하지 않는다. API 토큰/원본 계좌정보를 기록하지 않는다.

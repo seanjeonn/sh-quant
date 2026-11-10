@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "set_id": "TODO_YYYY-MM-DD_slug",
+  "timezone": "Asia/Seoul",
+  "markets": ["US", "KR"],
+  "tracking_issue": "https://github.com/seanjeonn/sh-quant/issues/TODO",
+  "hypothesis": "TODO concrete testable hypothesis; this template is invalid until filled",
+  "selection_reason": "TODO prior lessons and first executable backlog item",
+  "prior_oos_exposure": "TODO observed historical data and provider boundary",
+  "engine_commit": null,
+  "cargo_lock_sha256": null,
+  "binary_sha256": null,
+  "data_manifest_sha256": null,
+  "holdout_status": "exposed",
+  "machine_policy": {
+    "selection": "mean_is_sharpe_v1",
+    "evaluation": "sharpe_excess_mdd_v1"
+  },
+  "budget": {"max_attempts": 12, "max_wall_minutes": 120, "max_repairs": 3},
+  "baseline": {"run_id": "TODO_set-id__baseline", "parameters": {}, "signal": "TODO"},
+  "variants": [
+    {"run_id": "TODO_set-id__v001", "parameters": {}, "signal": "TODO distinct executable signal"},
+    {"run_id": "TODO_set-id__v002", "parameters": {}, "signal": "TODO another distinct executable signal"}
+  ],
+  "next_experiment": {
+    "hypothesis": "TODO concrete next hypothesis, at least20 characters",
+    "reason": "TODO explain the next finite comparison, at least20 characters"
+  },
+  "limitations": ["OOS jointly computed and stored, not untouched holdout", "Toss adjusted-price return is not dividend-reinvested total return", "Fixed current universe has survivorship bias; calendar completeness not certified"],
+  "publication_policy": "All raw/numeric evidence stays outside Git; only permitted descriptors/hashes and qualitative report published"
+}
