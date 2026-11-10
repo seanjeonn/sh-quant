@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "set_id": "2026-11-10_ema_cross",
+  "selected_at": "2026-11-10T14:43:35.319829+09:00",
+  "selection_split": "IS",
+  "oos_used_for_selection": false,
+  "holdout_status": "exposed",
+  "selected_run_id": "2026-11-10_ema_cross__v002",
+  "baseline_run_id": "2026-11-10_ema_cross__baseline",
+  "successful_variant_ids": [
+    "2026-11-10_ema_cross__v001",
+    "2026-11-10_ema_cross__v002",
+    "2026-11-10_ema_cross__v003"
+  ],
+  "all_attempt_ids": [
+    "2026-11-10_ema_cross__baseline",
+    "2026-11-10_ema_cross__v001",
+    "2026-11-10_ema_cross__v002",
+    "2026-11-10_ema_cross__v003"
+  ],
+  "selection_rule": {
+    "split": "IS",
+    "objective": "maximize arithmetic mean of US and KR IS sharpe as stored by engine (4 decimals)",
+    "tie_break": "then maximize mean IS cagr, then maximize mean IS mdd (less negative), then baseline first, then lexicographic run_id; exact Decimal comparisons of stored values"
+  },
+  "reason": "Applied exact Decimal ordering of preregistered mean IS Sharpe/CAGR/MDD, baseline preference, run_id; no OOS ranking or candidate changes",
+  "plan_sha256": "dd6b25cb296b70737702259df0ac35fe68995a7cf8838db0712c360444f68216",
+  "data_manifest_sha256": "a408e2c379be71be889dfc28952bf7f547f20ee08f30e22a477a45a827212622",
+  "private_selection_alias": "private:research/selection.json",
+  "private_selection_sha256": "2dc43bf872b2d4b3acfb910462351fd3b54c30b127ed844815bf9edf209855e9",
+  "private_results_index_sha256": "7e33c2bbca8837c5c1407d656da71f09a7aa006b0729b34d5758e7008d2deb55",
+  "publication": "Numeric IS ranking evidence remains private per provider policy; all four successful trials retained"
+}
