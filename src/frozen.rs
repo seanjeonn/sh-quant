@@ -224,16 +224,16 @@ use serde_json::{Value, json};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 
-/// A fail-closed exclusive writer lock. A crash may leave .writer.lock; inspect
-/// and remove it manually only after confirming no writer is alive.
+/// A nonblocking exclusive kernel lock on a stable .writer.lock sidecar (#30).
+/// Keep the file descriptor alive for the entire Store lifetime; closing it
+/// (including process death) releases the lock. Never unlink the sidecar: a
+/// replacement inode could otherwise admit a second writer. Unix File opens
+/// are close-on-exec; fork-only descendants must not retain the descriptor.
+/// Crash-left .pending files remain fail-closed/no-overwrite. The runner repairs
+/// by using distinct attempt directories, not deleting unknown artifacts.
 pub struct Store {
     dir: PathBuf,
     _lock: fs::File,
-}
-impl Drop for Store {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(self.dir.join(".writer.lock"));
-    }
 }
 impl Store {
     pub fn open(dir: &Path) -> Result<Self> {
@@ -251,12 +251,36 @@ impl Store {
             }
         }
         secure(dir, true)?;
-        let lock = fs::OpenOptions::new()
+        let lock_path = dir.join(".writer.lock");
+        let lock = match fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600)
-            .open(dir.join(".writer.lock"))
-            .context("private output locked")?;
+            .open(&lock_path)
+        {
+            Ok(lock) => lock,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Validate before opening: reject symlinks, hardlinks and
+                // non-regular files (a FIFO must not block this open).
+                secure(&lock_path, false)?;
+                fs::OpenOptions::new().write(true).open(&lock_path)?
+            }
+            Err(e) => return Err(e).context("private output lock open"),
+        };
+        let metadata = lock.metadata()?;
+        ensure!(
+            metadata.is_file() && metadata.nlink() == 1,
+            "invalid private lock type"
+        );
+        let named = fs::symlink_metadata(&lock_path)?;
+        ensure!(
+            named.is_file()
+                && named.nlink() == 1
+                && (named.dev(), named.ino()) == (metadata.dev(), metadata.ino()),
+            "private lock inode changed"
+        );
+        lock.set_permissions(fs::Permissions::from_mode(0o600))?;
+        lock.try_lock().context("private output locked")?;
         let store = Self {
             dir: dir.to_path_buf(),
             _lock: lock,
@@ -400,6 +424,127 @@ pub(crate) mod tests {
         f.write(&v);
         assert!(Frozen::load(&f.manifest()).is_err());
     }
+    // Invoked only by the process-death regression test, never by the suite.
+    #[test]
+    #[ignore]
+    fn private_store_process_holder() {
+        let dir = PathBuf::from(std::env::var_os("SH_QUANT_LOCK_TEST_DIR").unwrap());
+        let ready = PathBuf::from(std::env::var_os("SH_QUANT_LOCK_TEST_READY").unwrap());
+        let _store = Store::open(&dir).unwrap();
+        fs::write(ready, b"ready").unwrap();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+    }
+
+    #[test]
+    fn private_store_refuses_concurrent_process_and_reopens_after_sigkill() {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+        struct ChildGuard(std::process::Child);
+        impl Drop for ChildGuard {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let f = Fixture::new();
+        let dir = f.0.join("output");
+        let ready = f.0.join("ready");
+        let mut child = ChildGuard(
+            Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--ignored",
+                    "--exact",
+                    "frozen::tests::private_store_process_holder",
+                ])
+                .env("SH_QUANT_LOCK_TEST_DIR", &dir)
+                .env("SH_QUANT_LOCK_TEST_READY", &ready)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready.exists() {
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "lock holder exited before ready"
+            );
+            assert!(Instant::now() < deadline, "lock holder readiness timeout");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let lock_path = dir.join(".writer.lock");
+        let before = fs::metadata(&lock_path).unwrap();
+        // This process must fail immediately while the independent writer lives.
+        assert!(Store::open(&dir).is_err());
+        assert!(child.0.try_wait().unwrap().is_none());
+        assert_eq!(fs::metadata(&lock_path).unwrap().ino(), before.ino());
+        child.0.kill().unwrap(); // SIGKILL on Unix: Store::drop cannot run.
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(child.0.wait().unwrap().signal(), Some(9));
+        let store = Store::open(&dir).expect("kernel must release writer lock after SIGKILL");
+        assert!(Store::open(&dir).is_err());
+        drop(store);
+        let after = fs::metadata(&lock_path).expect("lock sidecar must persist after normal drop");
+        assert_eq!((after.dev(), after.ino()), (before.dev(), before.ino()));
+        let _store = Store::open(&dir).unwrap();
+    }
+
+    #[test]
+    fn private_store_preserves_pending_crash_artifacts_and_ids() {
+        let f = Fixture::new();
+        let dir = f.0.join("output");
+        fs::create_dir(&dir).unwrap();
+        // A pre-upgrade empty lock sidecar is safe to reuse, never delete.
+        fs::write(dir.join(".writer.lock"), b"").unwrap();
+        let pending = dir.join(".index.json.pending");
+        fs::write(&pending, b"unknown interrupted write").unwrap();
+        let orphan = dir.join("orphan.json");
+        fs::write(&orphan, b"unknown orphan detail").unwrap();
+        let mut store = Store::open(&dir).unwrap();
+        assert!(store.insert(json!({"id":"new"}), None).is_err());
+        assert_eq!(fs::read(&pending).unwrap(), b"unknown interrupted write");
+        assert!(!dir.join("index.json").exists());
+        assert!(
+            store
+                .insert(json!({"id":"orphan"}), Some(json!({})))
+                .is_err()
+        );
+        assert_eq!(fs::read(&orphan).unwrap(), b"unknown orphan detail");
+        drop(store);
+        let mut store = Store::open(&dir).unwrap();
+        assert!(store.insert(json!({"id":"new"}), None).is_err());
+        assert_eq!(fs::read(&pending).unwrap(), b"unknown interrupted write");
+    }
+
+    #[test]
+    fn private_store_rejects_aliased_lock_sidecars_without_removing_them() {
+        use std::os::unix::fs::symlink;
+        for hardlink in [false, true] {
+            let f = Fixture::new();
+            let dir = f.0.join("output");
+            fs::create_dir(&dir).unwrap();
+            let target = f.0.join("unrelated");
+            fs::write(&target, b"must not change").unwrap();
+            fs::set_permissions(&target, fs::Permissions::from_mode(0o644)).unwrap();
+            let lock = dir.join(".writer.lock");
+            if hardlink {
+                fs::hard_link(&target, &lock).unwrap();
+            } else {
+                symlink(&target, &lock).unwrap();
+            }
+            assert!(Store::open(&dir).is_err());
+            assert!(fs::symlink_metadata(&lock).is_ok());
+            assert_eq!(fs::read(&target).unwrap(), b"must not change");
+            assert_eq!(
+                fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+                0o644
+            );
+        }
+    }
+
     #[test]
     fn private_store_is_locked_atomic_and_refuses_duplicate_ids() {
         let f = Fixture::new();
