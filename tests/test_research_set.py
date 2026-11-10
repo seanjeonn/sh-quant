@@ -610,6 +610,212 @@ else:
         with self.assertRaises(r.Blocked): self.init()
 
 
+class ScopeTests(EngineFixture):
+    def scope(self, name='lease', seconds=5.0):
+        folder = self.base / name; folder.mkdir(mode=0o700)
+        path = folder / 'scope.json'
+        write(path, {'schema_version': 1, 'expires_at': time.time() + seconds, 'token': name})
+        return (str(path), r.digest(path.read_bytes()))
+
+    def nested(self, mode):
+        scope = self.scope(name=mode, seconds=.7 if mode == 'parentdeath' else 5)
+        heartbeat = self.base / (mode + '.heartbeat')
+        ready = self.base / (mode + '.ready')
+        leaf = ('import pathlib,time,signal,os,json; signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                'p=pathlib.Path(' + repr(str(heartbeat)) + '); tmp=p.with_suffix(".tmp"); '
+                '\nwhile True: tmp.write_text(json.dumps([os.getpid(),time.time()])); tmp.replace(p); time.sleep(.01)')
+        inner = ('import sys,subprocess,time,pathlib,os; sys.path.insert(0,' + repr(str(ROOT / 'tools')) + '); '
+                 'import research_set as r; '
+                 'child=r.OwnedTrial(subprocess.Popen,[sys.executable,"-c",' + repr(leaf) + '],timeout=2); '
+                 'pathlib.Path(' + repr(str(ready)) + ').write_text(str(child.pid)); '
+                 + ('time.sleep(.12); os._exit(0)' if mode == 'normal' else 'child.wait()'))
+        env = dict(os.environ)
+        outer_code = ('import sys,subprocess; sys.path.insert(0,' + repr(str(ROOT / 'tools')) + '); '
+                      'import research_set as r; '
+                      'c=r.OwnedTrial(subprocess.Popen,[sys.executable,"-c",' + repr(inner) + '],'
+                      'timeout=2,revoke_scope=True,execution_scope=' + repr(scope) + '); c.wait()')
+        parent = None; outer = None
+        try:
+            if mode == 'parentdeath':
+                parent = subprocess.Popen([sys.executable, '-c', outer_code], env=env)
+            else:
+                outer = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', inner], timeout=.4,
+                                     execution_scope=scope, revoke_scope=True, env=env)
+            deadline = time.monotonic() + 2
+            while not heartbeat.exists() and time.monotonic() < deadline: time.sleep(.01)
+            self.assertTrue(heartbeat.exists(), 'genuine nested OwnedTrial did not launch')
+            if mode == 'parentdeath':
+                assert parent is not None
+                parent.kill(); parent.wait(timeout=2)
+            else:
+                assert outer is not None
+                if mode == 'explicit': outer.stop()
+                elif mode == 'flag': r.revoke_scope(scope); outer.wait()
+                else: outer.wait()
+            time.sleep(.45 if mode != 'parentdeath' else .95)
+            before = heartbeat.read_bytes(); time.sleep(.12)
+            self.assertEqual(heartbeat.read_bytes(), before, 'nested owned group survived cancellation/deadline')
+            for pid in (int(ready.read_text()), json.loads(before)[0]):
+                status = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True)
+                self.assertFalse(status.returncode == 0 and 'Z' not in status.stdout, 'live nested process')
+            self.assertTrue((Path(scope[0]).parent / 'cancelled').exists())
+        finally:
+            # No PID from a file is ever signalled. All synthetic leases are bounded.
+            if outer is not None: outer.stop()
+            if parent is not None and parent.poll() is None: parent.kill(); parent.wait(timeout=2)
+            time.sleep(2.1 if not (Path(scope[0]).parent / 'cancelled').exists() else .05)
+
+    def test_nested_outer_timeout(self): self.nested('timeout')
+    def test_nested_outer_normal_exit(self): self.nested('normal')
+    def test_nested_outer_explicit_cancel(self): self.nested('explicit')
+    def test_nested_scope_flag(self): self.nested('flag')
+    def test_nested_parent_sigkill(self): self.nested('parentdeath')
+
+    def test_inherit_pointer_without_explicit_scope(self):
+        scope = self.scope()
+        pointer = self.base / 'active-scope.json'
+        write(pointer, {'path': scope[0], 'sha256': scope[1]})
+        with mock.patch.dict(os.environ, {'INVESTOPS_SCOPE_POINTER': str(pointer)}):
+            child = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', 'pass'], timeout=2, revoke_scope=True)
+            self.assertEqual(child.wait(), 0)
+        self.assertTrue((Path(scope[0]).parent / 'cancelled').exists())
+
+    def supervised_plan(self):
+        self.pointer = self.base / 'active-scope.json'
+        self.plan['supervisor_scope'] = str(self.pointer)
+        write(self.planpath, self.plan)
+        scope = self.scope()
+        write(self.pointer, {'path': scope[0], 'sha256': scope[1]})
+        return scope
+
+    def test_run_rejects_expired_cancelled_and_mismatched_context_without_charge(self):
+        scope = self.supervised_plan(); self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan')
+            expired = self.scope(name='expired', seconds=-1)
+            for current in (expired, scope):
+                if current == scope: r.revoke_scope(scope)
+                write(self.pointer, {'path': current[0], 'sha256': current[1]})
+                with self.assertRaises(r.Blocked): runner.run_trial()
+                self.assertEqual(len(runner.starts()), 0)
+            live = self.scope(name='live')
+            write(self.pointer, {'path': live[0], 'sha256': live[1]})
+            for env in ({'INVESTOPS_SCOPE_POINTER': str(self.base / 'other.json')},
+                        {'INVESTOPS_SCOPE_FILE': scope[0], 'INVESTOPS_SCOPE_SHA256': scope[1]}):
+                with mock.patch.dict(os.environ, env), self.assertRaises(r.Blocked): runner.run_trial()
+                self.assertEqual(len(runner.starts()), 0)
+            # Mutable-pointer validation is RUN-only, never historical evidence.
+            self.assertEqual(runner.verify()['state'], 'ready_trial')
+
+    def test_supervised_plan_no_scope_blocks_before_attempt(self):
+        self.supervised_plan(); self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan')
+            self.pointer.unlink()
+            self.assertEqual(runner.verify()['state'], 'ready_trial')
+            with self.assertRaises((r.Blocked, OSError)): runner.run_trial()
+            self.assertEqual(len(runner.starts()), 0)
+
+    def test_scope_pointer_advances_across_resume_not_provenance(self):
+        first = self.supervised_plan(); self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan'); runner.step()
+            config = runner.config
+        self.assertFalse((Path(first[0]).parent / 'cancelled').exists())
+        r.revoke_scope(first)
+        scope = first
+        for i in range(2):
+            scope = self.scope(name='resume' + str(i))
+            write(self.pointer, {'path': scope[0], 'sha256': scope[1]})
+            with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+                self.assertEqual(runner.config, config)
+                runner.step()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            runner.step(); self.checkpoint(runner, 'selection'); runner.step(); runner.step()
+            self.assertEqual(runner.verify()['state'], 'completed')
+        r.revoke_scope(scope)
+        with r.Runner(self.registry, self.plan['set_id']) as runner:
+            self.assertEqual(runner.verify()['state'], 'completed')
+            with mock.patch.object(r.time, 'time', return_value=time.time() + 3600):
+                self.assertEqual(runner.verify()['state'], 'completed')
+        self.pointer.unlink()
+        with r.Runner(self.registry, self.plan['set_id']) as runner:
+            self.assertEqual(runner.verify()['state'], 'completed')
+
+    def test_init_rejects_dropped_or_mismatched_supervisor_environment(self):
+        scope = self.scope()
+        pointer = self.base / 'active-scope.json'
+        write(pointer, {'path': scope[0], 'sha256': scope[1]})
+        with mock.patch.dict(os.environ, {'INVESTOPS_SCOPE_POINTER': str(pointer)}):
+            with self.assertRaises(r.Blocked): self.init()
+        with mock.patch.dict(os.environ, {'INVESTOPS_SCOPE_FILE': scope[0], 'INVESTOPS_SCOPE_SHA256': scope[1]}):
+            with self.assertRaises(r.Blocked): self.init()
+        self.plan['supervisor_scope'] = str(self.base / 'different.json'); write(self.planpath, self.plan)
+        with mock.patch.dict(os.environ, {'INVESTOPS_SCOPE_POINTER': str(pointer)}):
+            with self.assertRaises(r.Blocked): self.init()
+
+    def test_two_inner_trials_share_scope_without_revoking_owner(self):
+        scope = self.scope()
+        code = ('import sys,subprocess; sys.path.insert(0,' + repr(str(ROOT / 'tools')) + '); '
+                'import research_set as r; '
+                '\nfor i in range(2):\n'
+                ' c=r.OwnedTrial(subprocess.Popen,[sys.executable,"-c","pass"],timeout=1)\n'
+                ' assert c.wait()==0\n'
+                ' r.validate_scope(' + repr(scope) + ')\n')
+        outer = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', code], timeout=3,
+                             execution_scope=scope, revoke_scope=True)
+        self.assertEqual(outer.wait(), 0)
+        self.assertTrue((Path(scope[0]).parent / 'cancelled').exists())
+
+    def test_scope_and_pointer_security_before_launch(self):
+        scope = self.scope()
+        path = Path(scope[0]); original = path.read_bytes()
+        pointer = self.base / 'active-scope.json'
+        write(pointer, {'path': scope[0], 'sha256': scope[1]})
+        def rejected(value=scope):
+            launch = mock.Mock()
+            with self.assertRaises((r.Blocked, OSError, TypeError)):
+                r.OwnedTrial(launch, ['synthetic'], timeout=1, execution_scope=value)
+            launch.assert_not_called()
+        for obj in ({'schema_version': 1, 'expires_at': time.time()-1, 'token': 'safe'},
+                    {'schema_version': 1, 'expires_at': True, 'token': 'safe'},
+                    {'schema_version': 1, 'expires_at': time.time()+5, 'token': '../unsafe'},
+                    {'schema_version': 2, 'expires_at': time.time()+5, 'token': 'safe'}):
+            write(path, obj); rejected((str(path), r.digest(path.read_bytes())))
+        write(path, original)
+        rejected((str(path), '0'*64))
+        path.chmod(0o644); rejected(); path.chmod(0o600)
+        path.parent.chmod(0o755); rejected(); path.parent.chmod(0o700)
+        alias = self.base / 'scope-link'; alias.symlink_to(path); rejected((str(alias), scope[1])); alias.unlink()
+        os.link(path, alias); rejected(); alias.unlink()
+        r.revoke_scope(scope); rejected()
+        self.assertEqual((path.parent / 'cancelled').stat().st_mode & 0o777, 0o600)
+        before = (path.parent / 'cancelled').read_bytes()
+        r.revoke_scope(scope)
+        self.assertEqual((path.parent / 'cancelled').read_bytes(), before)
+        for obj in ({'path': scope[0]}, {'path': scope[0], 'sha256': 'not-a-hash'},
+                    {'path': scope[0], 'sha256': scope[1], 'command': 'forbidden'}):
+            write(pointer, obj)
+            with self.assertRaises(r.Blocked): r.pointer_scope(pointer)
+
+    def test_owner_launch_error_revokes_scope(self):
+        scope = self.scope()
+        def fail(*args, **kwargs): raise OSError('synthetic')
+        child = r.OwnedTrial(fail, ['synthetic'], timeout=1, execution_scope=scope, revoke_scope=True)
+        with self.assertRaises(r.Blocked): child.wait()
+        self.assertTrue((Path(scope[0]).parent / 'cancelled').exists())
+
+    def test_scope_deadline_bounds_owned_trial_and_revokes(self):
+        scope = self.scope(seconds=.2)
+        before = time.monotonic()
+        child = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', 'import time; time.sleep(3)'],
+                             timeout=2, execution_scope=scope, revoke_scope=True)
+        child.wait()
+        self.assertTrue(child.timed_out)
+        self.assertLess(time.monotonic() - before, 1)
+        self.assertTrue((Path(scope[0]).parent / 'cancelled').exists())
+
+
 class CliTests(Fixture):
     def cli(self, *args):
         return subprocess.run([sys.executable, str(ROOT / 'tools/research_set.py'), *args], capture_output=True, text=True)

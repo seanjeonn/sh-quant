@@ -86,13 +86,17 @@ def read(path):
 
 
 def load(path):
+    return decode_json(read(path))
+
+
+def decode_json(raw):
     def pairs(items):
         result = {}
         for k, v in items:
             require(k not in result, 'duplicate_json_key'); result[k] = v
         return result
     try:
-        return json.loads(read(path), object_pairs_hook=pairs,
+        return json.loads(raw, object_pairs_hook=pairs,
                           parse_constant=lambda _: (_ for _ in ()).throw(Blocked('nonfinite_json')))
     except (ValueError, UnicodeError):
         raise Blocked('invalid_json') from None
@@ -165,6 +169,10 @@ def input_fingerprint(planpath, repo, binary, manifest):
         contract().validate_plan(plan)
     except contract().ContractError:
         raise Blocked('invalid_contract') from None
+    scope_pointer = plan.get('supervisor_scope')
+    if 'supervisor_scope' in plan:
+        require(isinstance(scope_pointer, str) and Path(scope_pointer).is_absolute()
+                and '..' not in Path(scope_pointer).parts, 'invalid_scope_pointer')
     for candidate in [plan['baseline'], *plan['variants']]:
         signal_text = candidate['signal']
         require(isinstance(signal_text, str) and len(signal_text) <= 16384
@@ -196,15 +204,18 @@ def input_fingerprint(planpath, repo, binary, manifest):
         require(digest(read(p)) == entry['sha256'], 'snapshot_changed')
         require(name not in snapshots, 'duplicate_snapshot')
         snapshots[name] = entry['sha256']
-    return plan, {'plan_sha256': digest(raw), 'repo': str(repo), 'binary': str(binary),
-                  'manifest': str(manifest), 'plan_source': str(planpath),
-                  'code_tree': code_tree(repo), 'snapshots': snapshots,
-                  'binary_sha256': plan['binary_sha256'], 'manifest_sha256': plan['data_manifest_sha256']}
+    config = {'plan_sha256': digest(raw), 'repo': str(repo), 'binary': str(binary),
+              'manifest': str(manifest), 'plan_source': str(planpath),
+              'code_tree': code_tree(repo), 'snapshots': snapshots,
+              'binary_sha256': plan['binary_sha256'], 'manifest_sha256': plan['data_manifest_sha256']}
+    if scope_pointer is not None: config['supervisor_scope'] = scope_pointer
+    return plan, config
 
 
 def initialize(registry, planpath, repo, binary, manifest):
     registry, planpath, repo, binary, manifest = map(Path, (registry, planpath, repo, binary, manifest))
     plan, config = input_fingerprint(planpath, repo, binary, manifest)
+    plan_execution_scope(plan)  # Initialization must not silently discard supplied context.
     sid = plan['set_id']
     require(re.fullmatch(r'\d{4}-\d{2}-\d{2}_[a-z0-9][a-z0-9_-]{0,63}', sid), 'invalid_set_id')
     day = dt.date.fromisoformat(sid[:10]); today = dt.datetime.now(KST).date()
@@ -570,13 +581,17 @@ class Runner:
         return [self.config['binary'], 'run', str(strategy), '--data-manifest', self.config['manifest'], '--output-dir', str(output)]
 
     def run_trial(self):
+        execution_scope = plan_execution_scope(self.plan)
         rows = self.successes(); done = {r['id'] for r in rows}
         candidate = next(c for c in self.candidates() if c['run_id'] not in done)
         previous = [s for s in self.starts() if s['candidate_id'] == candidate['run_id']]
         repairs = len(previous)
         require(len(self.starts()) < self.plan['budget']['max_attempts'], 'attempt_budget')
         require(sum(s['repair'] > 0 for s in self.starts()) + bool(repairs) <= self.plan['budget']['max_repairs'], 'repair_budget')
-        remaining = self.remaining(); require(remaining > 0, 'wall_budget')
+        remaining = self.remaining()
+        if execution_scope is not None:
+            remaining = min(remaining, validate_scope(execution_scope) - time.time())
+        require(remaining > 0, 'wall_budget')
         rid = candidate['run_id'] + ('__repair' + str(repairs) if repairs else '')
         trials = self.folder / 'trials'
         if not trials.exists(): trials.mkdir(mode=0o700); fsync_dir(self.folder)
@@ -595,10 +610,13 @@ class Runner:
         self.append(start)  # Durable attempt charge BEFORE creating the child.
         child = None; rc = None; timed_out = False
         env = {'PATH': os.defpath, 'TZ': 'Asia/Seoul', 'HOME': str(Path.home())}
+        if execution_scope is not None:
+            env['INVESTOPS_SCOPE_POINTER'] = self.plan['supervisor_scope']
         with os.fdopen(os.open(trial / 'stdout.log', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stdout, \
              os.fdopen(os.open(trial / 'stderr.log', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stderr:
             try:
                 child = OwnedTrial(self.launch, command, timeout=min(TRIAL_TIMEOUT, remaining),
+                                   execution_scope=execution_scope,
                                    cwd=self.config['repo'], env=env, stdin=subprocess.DEVNULL,
                                    stdout=stdout, stderr=stderr, pass_fds=(self.fd,))
                 self.append({'event': 'child', 'run_id': rid, 'pid': child.pid,
@@ -646,6 +664,73 @@ class Runner:
 TRIAL_TIMEOUT = 300
 
 
+def validate_scope(scope):
+    """Validate a live immutable lease, never used by historical verification."""
+    require(isinstance(scope, tuple) and len(scope) == 2, 'invalid_scope')
+    path, sha = scope
+    require(isinstance(path, (str, Path)) and isinstance(sha, str)
+            and re.fullmatch(r'[0-9a-f]{64}', sha), 'invalid_scope')
+    path = safe_path(path, private=True)
+    raw = read(path); require(digest(raw) == sha, 'scope_changed')
+    value = decode_json(raw)
+    require(isinstance(value, dict) and set(value) == {'schema_version', 'expires_at', 'token'}, 'invalid_scope')
+    require(type(value['schema_version']) is int and value['schema_version'] == 1
+            and type(value['expires_at']) in (int, float) and math.isfinite(value['expires_at'])
+            and isinstance(value['token'], str) and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value['token']), 'invalid_scope')
+    require(value['expires_at'] > time.time(), 'expired_scope')
+    marker = path.parent / 'cancelled'
+    require(not marker.exists() and not marker.is_symlink(), 'cancelled_scope')
+    return value['expires_at']
+
+
+def revoke_scope(scope):
+    """Publish cancellation BEFORE any owned-group cleanup, including errors."""
+    if scope is None: return
+    path = Path(scope[0]).parent / 'cancelled'
+    try:
+        immutable(path, encode({'schema_version': 1}))
+    except FileExistsError:
+        # Another nested supervisor may have revoked the same immutable marker.
+        safe_path(path, private=True)
+
+
+def pointer_scope(pointer):
+    value = load(safe_path(pointer, private=True))
+    require(isinstance(value, dict) and set(value) == {'path', 'sha256'}
+            and isinstance(value['path'], str), 'invalid_scope_pointer')
+    scope = (value['path'], value['sha256'])
+    validate_scope(scope)
+    return scope
+
+
+def plan_execution_scope(plan):
+    """Resolve the mutable pointer exactly once for this new invocation/trial."""
+    pointer = plan.get('supervisor_scope')
+    supplied_pointer = os.environ.get('INVESTOPS_SCOPE_POINTER')
+    path = os.environ.get('INVESTOPS_SCOPE_FILE'); sha = os.environ.get('INVESTOPS_SCOPE_SHA256')
+    require(supplied_pointer is None or supplied_pointer == pointer, 'scope_pointer_mismatch')
+    require((path is None) == (sha is None), 'incomplete_scope_environment')
+    if pointer is None:
+        require(path is None and supplied_pointer is None, 'supervisor_scope_required')
+        return None
+    scope = pointer_scope(pointer)
+    require(path is None or (path, sha) == scope, 'scope_environment_mismatch')
+    return scope
+
+
+def inherited_scope():
+    path = os.environ.get('INVESTOPS_SCOPE_FILE'); sha = os.environ.get('INVESTOPS_SCOPE_SHA256')
+    pointer = os.environ.get('INVESTOPS_SCOPE_POINTER')
+    require((path is None) == (sha is None), 'incomplete_scope_environment')
+    direct = (path, sha) if path is not None else None
+    if direct is not None: validate_scope(direct)
+    if pointer is not None:
+        current = pointer_scope(pointer)
+        require(direct is None or direct == current, 'scope_environment_mismatch')
+        return current
+    return direct
+
+
 class OwnedTrial:
     """A live session leader cleans its OWN group, even after worker SIGKILL.
 
@@ -653,8 +738,17 @@ class OwnedTrial:
     retains group ownership until cleanup; the parent never signals a saved PID.
     Only the Python test API can inject launch. The CLI still launches the pinned
     native binary, with no command/helper option exposed to users.
+    Every nested lease watches the same immutable scope; only the outer owner
+    opts into revoke_scope=True. Inner trial completion must not cancel its owner.
     """
-    def __init__(self, launch, command, *, timeout, **kwargs):
+    def __init__(self, launch, command, *, timeout, execution_scope=None, revoke_scope=False, **kwargs):
+        execution_scope = inherited_scope() if execution_scope is None else execution_scope
+        if execution_scope is not None:
+            validate_scope(execution_scope)
+            env = dict(kwargs.get('env', os.environ))
+            env['INVESTOPS_SCOPE_FILE'] = str(execution_scope[0])
+            env['INVESTOPS_SCOPE_SHA256'] = execution_scope[1]
+            kwargs['env'] = env
         self.report, report_write = os.pipe()
         control_read, self.control = os.pipe()
         self.returncode = None; self.timed_out = False; self.reaped = False
@@ -665,18 +759,23 @@ class OwnedTrial:
             raise
         if self.pid == 0:
             os.close(self.report); os.close(self.control)
-            self.supervise(launch, command, timeout, kwargs, report_write, control_read)
+            self.supervise(launch, command, timeout, kwargs, report_write, control_read, execution_scope, revoke_scope)
             os._exit(125)
         os.close(report_write); os.close(control_read)
 
     @staticmethod
-    def supervise(launch, command, timeout, kwargs, report, control):
+    def supervise(launch, command, timeout, kwargs, report, control, execution_scope, scope_owner):
         import select
         # No group signal is used unless setsid succeeded in this very process.
         try: os.setsid()
-        except BaseException: os._exit(125)
+        except BaseException:
+            try:
+                if scope_owner: revoke_scope(execution_scope)
+            finally: os._exit(125)
         value = {'error': True}
         try:
+            if execution_scope is not None:
+                timeout = min(timeout, validate_scope(execution_scope) - time.time())
             deadline = time.monotonic() + timeout
             child = launch(command, start_new_session=False, **kwargs)
             # Caught handlers reset to default on exec; the engine does not
@@ -685,6 +784,12 @@ class OwnedTrial:
             cancel = False; timed_out = False
             while child.poll() is None:
                 timed_out = time.monotonic() >= deadline
+                if execution_scope is not None:
+                    try: validate_scope(execution_scope)
+                    except Blocked as error:
+                        cancel = True
+                        timed_out = timed_out or str(error) == 'expired_scope'
+                    except OSError: cancel = True
                 if timed_out or cancel: break
                 if control is not None and select.select([control], [], [], .02)[0]:
                     message = os.read(control, 1)
@@ -694,6 +799,7 @@ class OwnedTrial:
                         # engine, still bounded by the original absolute deadline.
                         os.close(control); control = None
                 elif control is None: time.sleep(.02)
+            if scope_owner: revoke_scope(execution_scope)
             if child.returncode is None:
                 os.killpg(os.getpgrp(), signal.SIGTERM)
                 time.sleep(.2)
@@ -704,6 +810,9 @@ class OwnedTrial:
         except BaseException:
             pass
         finally:
+            try:
+                if scope_owner: revoke_scope(execution_scope)
+            except BaseException: pass  # cleanup of the owned group must still run
             try: os.write(report, encode(value))
             except OSError: pass  # parent may already be dead
             # This PID is still alive and is its own group leader. There is no
