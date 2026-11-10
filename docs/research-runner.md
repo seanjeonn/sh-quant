@@ -66,6 +66,12 @@ schema2는 `hermes/templates/runner-plan.json`의 빈 양식부터 시작하되 
 - 이 canary의 시장 API/자격증명/GitHub 쓰기는0회다. synthetic 지표는 연구 성과로 게시하지 않는다. 로그/fixture/로컬 Git checkpoint/검증 보고서는 private에 보존한다. 실제 canary와 mock-engine/kill 테스트는 검증 종류가 다르며 서로 대체하지 않는다.
 - 최초 staged 공백 검사에서 새 파일 EOF blank line을 발견해 제거한 뒤 commit했다. 독립 검토 지적이 생기면 동일한 원칙으로 증거를 보존하며 수정한다.
 
+## 최종 재검증·재검토 (2026-11-10)
+
+수정 revision `a408569bdc91931ef5f05675f8ff0527ebb836c3`에서 실제 release Rust binary를 사용한 **두 번째 별도 SYNTHETIC native canary**도 plan/selection의 로컬 remote checkpoint와3후보 실행·평가·완료·idempotent 재호출까지 통과했다. 이전 canary는 보존하고 새 private 경로에 fixture/driver/검증 보고서 및 SHA-256을 남겼다. 이 역시 시장 데이터나 성과가 아니다. 기존 실제 EMA 세트 읽기 전용 audit는 같은 completed/defer를 확인했다.
+
+spec 및 security 재검토 모두 **APPROVE**, 남은 material blocker 없음. 독립 재검토는 Python79개 통과 및 변형 중복/미추적 빌드/원격 checkpoint/정상종료 descendants 회귀를 재현했다. 부모도 Python79개/Rust20개(테스트 holder helper1개 ignored)/release build/diff 검사 통과를 확인했다. 의도적 setsid 탈출 격리·IS-only sweep·예약 활성화는 이 결과가 보장하지 않는다. #21 일정/전달 canary는 이 버전 고정 이후 별도로 검증한다.
+
 ## 검증 명령
 
 ```text
