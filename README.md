@@ -16,6 +16,10 @@ python3 -m http.server 8787
 
 위 `run`은 기존 CLI 사용 예시다. **이미 기록된 ID로 다시 실행하면 결과를 덮어쓸 수 있으므로 연구에서는 실행하지 않는다.** 연구 실행에는 새 고유 ID를 사용한다. HTTP 서버는 로컬 확인용이며 자동 배포가 아니다.
 
+## 토스 일봉 / 비공개 frozen 실행
+
+토스 데이터는 [별도 데이터 규약](docs/toss-data.md)을 먼저 읽는다. `tools/prepare_toss.py`로 저장소 밖의 신규 private snapshot을 준비하고 `run ... --data-manifest <absolute-manifest> --output-dir <absolute-private-results>`로 실행한다. 기존 `run`의 Yahoo 경로와 수익률 계산은 유지한다. 토스 원본/CSV/수치 로그/곡선을 공개 `results/`나 대시보드에 게시하지 않는다. 토스 조정가격 수익률은 Yahoo 배당재투자 총수익률과 동일하지 않다.
+
 ## 하루 연구 세트
 
 자세한 규칙은 [연구 세트 규약](docs/daily-research-set.md), 실행 절차는 [Hermes 스킬](hermes/SKILL.md)을 읽는다.
@@ -50,4 +54,4 @@ python3 -m http.server 8787
 3. 작업 디렉터리는 저장소 루트로 설정해 `AGENTS.md`가 로드되게 한다. 실행 환경은 `TZ=Asia/Seoul`로 통일한다.
 4. 규칙·데이터 고정·수동 1세트 검증 후 별도 작업으로 매일 연구/주간 개선의 스케줄과 실행 예산을 설정한다. 과거의 07:00 예시는 활성 일정이 아니다.
 
-**이번 규칙 변경은 실행기·IS-only 스윕·frozen-data 모드·완료 판정기·cron을 구현하거나 등록하지 않는다.** 도구 지원이 없으면 수동 프로토콜을 따르고, 필수 데이터 준비/고정 등을 만족할 수 없으면 차단 원인과 후속 이슈를 남긴다. 실행·데이터 고정·검증 도구는 #20, 예약 자동화는 #21, IS-only 스윕은 #16에서 추적한다. GitHub 작업 범위는 [워크플로](docs/github-workflow.md)를 따른다.
+**#26은 토스 data-only 준비와 frozen 입력/private 결과만 연결한다. 연구 실행기·IS-only 스윕·완료 판정기·cron은 구현하거나 등록하지 않는다.** 수동 연구 프로토콜을 따르고 필수 데이터 준비/고정을 만족할 수 없으면 blocked로 기록한다. 더 넓은 실행·검증 도구는 #20, 예약 자동화는 #21, IS-only 스윕은 #16에서 추적한다. GitHub 작업 범위는 [워크플로](docs/github-workflow.md)를 따른다.

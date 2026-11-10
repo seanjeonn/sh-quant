@@ -38,11 +38,21 @@ cargo run --release --locked -q -- lesson <run-id> "<실제 결과에 근거한 
 
 현재 `sweep`, `research`, `--is-only`, `--holdout` 명령은 없다. 이미 구현된 것처럼 호출하거나 완료를 보고하지 않는다.
 
+토스 입력은 `docs/toss-data.md`를 먼저 읽고 다음 경로를 사용한다. 원본/CSV/수치 결과/로그는 Git 밖 private 디렉터리(700/600)에 보관하며 공개 `results/`에 쓰지 않는다.
+
+```text
+python3 tools/prepare_toss.py --env-file <absolute-private-env> --token-file <shared-private-token> --output <new-private-snapshot> --start-date 2015-01-01 --cutoff-exclusive <YYYY-MM-DD>
+cargo run --release --locked -q -- run strategies/<new-id>.toml --data-manifest <absolute-private-manifest> --output-dir <absolute-private-results>
+cargo run --release --locked -q -- lesson <new-id> "<교훈>" --output-dir <absolute-private-results>
+```
+
+토큰은 같은 client의 수집기끼리 공유한다. `BRK-B`는 연구 ID를 유지하고 검증된 토스 source_symbol `BRK.B`로 명시 매핑한다. 임의 티커 정규화는 금지한다. 준비 실패/재시도별 원응답을 덮어쓰지 않고 명확한 품질 오류 코드와 원값은 private 증거에 보존한다. 토스 조정가격 수익률은 Yahoo 배당재투자 총수익률과 다르다. 공개 메타데이터와 비공개 수치 증거의 SHA-256 연결은 연구 규약의 제한 데이터 예외를 따른다.
+
 ## Procedure
 
 1. **시작·중복 방지.** KST 날짜와 `research/<date>_*`의 원격 PR/로컬 상태를 확인한다. 완료 세트가 있으면 그날 새 세트를 만들지 않는다. 진행/차단 세트는 기록된 상태에서 재개한다. 동시 실행을 금지하고 전용 브랜치를 사용한다. 강제 reset/rebase/push로 다른 작업을 덮어쓰지 않는다.
 2. **가설 선정.** 과거 보고서의 기각/실패·교훈과 `backlog.md`를 읽는다. 미완료 큐의 첫 실행 가능한 가설을 우선하며, 다른 가설을 고르면 이유를 기록한다. 큐가 비면 중복되지 않는 가설을 자율 생성한다. 과거 OOS 결과를 참고했다면 노출 이력도 적고 새 실험을 독립적인 미관측 검증이라고 부르지 않는다. 출력: 가설과 선정 이유.
-3. **데이터 준비·추적·사전 계획.** 먼저 필요한 일봉 캐시를 확보·검증하고 파일 해시·대상·기간·수집 기준시각·snapshot 위치를 manifest에 확정한다. 현재 data-only 준비 명령은 없으므로 이 조건을 만족할 수 없으면 `data_setup`으로 차단하고 별도 준비 작업을 선행한다. 중복을 검색한 뒤 feature 양식으로 오늘 연구의 추적 이슈를 만든다. `hermes/templates/plan.json`을 복사해 `research/<set-id>/plan.json`의 모든 TODO/null을 실제 값으로 채운다. `write_file`/`patch`를 사용한다. baseline, 최소 2개 변형, 탐색 범위, IS 선택/동점 기준, 평가·채택/보류/기각 기준, 실행 수·시간 상한, 종료 조건, 확정된 데이터/엔진 provenance를 **첫 전략 실행 전에 커밋하고 작업 브랜치에 push**한다. 선택 기준은 OOS를 사용하지 않는다. API 토큰/원본 계좌정보를 기록하지 않는다.
+3. **데이터 준비·추적·사전 계획.** 먼저 필요한 일봉 캐시를 확보·검증하고 파일 해시·대상·기간·수집 기준시각·snapshot 위치를 manifest에 확정한다. 토스는 별도 준비 도구와 frozen manifest를 사용하며, Yahoo 캐시가 없거나 어느 공급자든 고정/품질을 충족할 수 없으면 `data_setup`으로 차단하고 별도 준비 작업을 선행한다. 중복을 검색한 뒤 feature 양식으로 오늘 연구의 추적 이슈를 만든다. `hermes/templates/plan.json`을 복사해 `research/<set-id>/plan.json`의 모든 TODO/null을 실제 값으로 채운다. `write_file`/`patch`를 사용한다. baseline, 최소 2개 변형, 탐색 범위, IS 선택/동점 기준, 평가·채택/보류/기각 기준, 실행 수·시간 상한, 종료 조건, 확정된 데이터/엔진 provenance를 **첫 전략 실행 전에 커밋하고 작업 브랜치에 push**한다. 선택 기준은 OOS를 사용하지 않는다. API 토큰/원본 계좌정보를 기록하지 않는다.
 4. **실행 직전 고정 상태 재확인.** 계획에 확정한 데이터 manifest와 실제 입력 파일·종목 목록·엔진 revision을 대조한다. 현재 자동 데이터 로딩은 `src/data.rs`를 확인해 캐시와 실제 로드 성공 종목을 대조한다. 세트 중 데이터/코드가 바뀌면 비교를 계속하지 말고 차단 사유로 남긴다. 뉴스는 선택 사항이며, 뉴스 전략의 필수 입력 실패는 차단이다. 일반 전략의 뉴스 실패는 경고로 기록한다.
 5. **기본형·복수 변형.** `strategies/<set-id>__baseline.toml`, `__v001.toml`, `__v002.toml` 등 서로 다른 새 ID를 쓴다. 같은 세트 태그 `set:<set-id>`로 연결하며 `parents`는 실제 앙상블 참조에만 사용한다. 실행마다 명령·시각·종료코드·파라미터·결과 경로·데이터/엔진 지문을 `attempts.jsonl`에 append한다. 로그도 세트 디렉터리에 보존한다. 이미 실행된 전략/결과는 덮어쓰지 않는다. 구문/실행 실패는 새 시도 ID로 최대 3회 수리하고 전체 예산에 포함한다. CLI `fail` 기록도 현재 세트의 새 ID만 허용한다.
 6. **선택 고정.** baseline과 최소 2개 서로 다른 변형이 정상 실행된 뒤, 사전에 정한 **IS 지표만**으로 선택한다. `hermes/templates/selection.json`을 채워 `selection.json`으로 저장하고 커밋·push한다. 모든 시도의 IS/OOS는 보존하되 OOS로 순위/파라미터를 바꾸지 않는다. 현재 CLI는 이미 OOS를 노출하므로 정직하게 `holdout_status: exposed`로 기록한다.

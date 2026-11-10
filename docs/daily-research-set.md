@@ -28,6 +28,14 @@ results/index.json    # CLI 생성 공유 인덱스; 기존 엔트리는 보존
 
 템플릿은 빈 양식이다. null/TODO/예시를 실제 실행 결과로 오인하지 않는다. `research/`는 아직 대시보드의 입력이 아니다. 파일 해시는 터미널/Python으로 계산하며 추정하지 않는다. 재현에 필요한 원본 데이터/캐시 snapshot은 gitignored 로컬 저장소 등 안전한 위치에 보존하고 manifest에 위치와 해시를 기록한다. 원본 보존이 불가능하면 그 한계를 기록하고 재현 가능하다고 주장하지 않는다.
 
+## 제한된 데이터의 비공개 증거
+
+토스 등 재배포가 제한된 공급자는 [비공개 데이터 규약](toss-data.md)을 따른다. 원본 수치·OHLCV·곡선·상세 성과·수치가 든 로그는 Git checkout 외부의 권한 제한 경로에 보존한다. 공개 연구 디렉터리의 manifest/attempts/selection/report에는 허용된 메타데이터와 private 원본의 SHA-256만 포함할 수 있다. 실제 private plan·데이터 manifest·시작/종료 로그·IS 선택 근거·시장별 비교 보고서가 존재하고 검증돼야 하며, 공개 수치를 생략한 것을 실험 생략의 근거로 사용하지 않는다.
+
+공개 plan에는 가설·전 후보/기준·예산·engine revision·private manifest 해시·위치 별칭을 고정한다. selection에는 후보 ID·IS-only 선택 규칙·전체 성공/실패 목록·private 선택 증거 해시를 포함해 커밋/push한 뒤 평가한다. 공개 report에는 정성 결론·상태·제약·후속 이슈와 private 수치 보고서 해시를 남긴다. 출력 경로는 신규 `--data-manifest`/`--output-dir` 모드로 분리하고 공유 공개 results index는 수정하지 않는다. 이 예외는 미노출 holdout을 제공하지 않으며 기존 OOS 노출 고지를 유지한다. 상세 로컬 경로/비밀정보를 공개 메타데이터에 넣지 않는다.
+
+기존 차단 manifest/audit/report는 덮어쓰지 않고 새 데이터 버전과 보고서 addendum으로 재개 이력을 연결한다. 코드 변경은 engineering 브랜치에서 검증·고정한 후 연구 브랜치로 비교 경계를 옮기며 연구 중 엔진/비용/split을 수정하지 않는다.
+
 ## 시작과 동시 실행 방지
 
 1. repo 루트의 AGENTS.md와 현재 이슈·열린 PR을 확인한다. 전용 checkout/worktree와 `research/<set-id>` 브랜치를 사용한다. dirty checkout은 보존하고 충돌 작업을 중단한다.
@@ -57,7 +65,7 @@ results/index.json    # CLI 생성 공유 인덱스; 기존 엔트리는 보존
 - 실행 전에 계획한 종목의 읽을 수 있는 캐시, 날짜 범위/품질, SHA-256, 실제 대상 목록을 manifest에 기록하고 재현용 snapshot을 보존한다.
 - 매 실행 전후 해당 파일·종목 목록을 대조하고 stderr의 skip/stale/cache 오류를 확인한다. 원치 않는 갱신·누락·엔진 변경은 blocked다. 엔진 코드와 `Cargo.lock`도 동일해야 한다.
 - `TZ=Asia/Seoul`인 동일 환경에서 수행한다. 세트 중 날짜가 바뀌거나 캐시 갱신이 일어나면 재현 조건을 확인하기 전에는 계속하지 않는다.
-- 현재 data-only 준비 명령과 frozen-data 모드는 없다. 캐시가 없거나 고정/품질을 확인할 수 없으면 `data_setup` 블로커로 기록하고 별도 데이터 준비/엔지니어링 작업을 선행한다. 전략 실행을 몰래 준비 단계로 써서 미등록 실험 결과를 만들지 않는다.
+- 토스는 `tools/prepare_toss.py`의 data-only 준비와 `run --data-manifest ... --output-dir ...` frozen 모드를 사용한다. 기본 Yahoo 경로는 기존 자동 캐시 정책을 유지한다. 어느 모드든 입력 고정/품질을 확인할 수 없으면 `data_setup` 블로커로 기록하고 별도 준비 작업을 선행한다. 전략 실행을 몰래 준비 단계로 써서 미등록 실험 결과를 만들지 않는다.
 - 뉴스는 뉴스 기반 가설일 때 필수다. 그 외 뉴스 수집 실패는 경고로 남기고 계속할 수 있다. 뉴스의 해당 시점 가용성도 입증하지 못하면 미래정보 없는 입력이라고 주장하지 않는다.
 
 ## 실행과 시도 기록
