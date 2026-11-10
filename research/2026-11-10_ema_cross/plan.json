@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "set_id": "2026-11-10_ema_cross",
+  "timezone": "Asia/Seoul",
+  "status": "planned",
+  "tracking_issue": "https://github.com/seanjeonn/sh-quant/issues/23",
+  "created_at": "2026-11-10T14:41:11.842773+09:00",
+  "resumed_after": "data_setup blocked evidence retained in report.md/status.json and original manifests; this is the same set, not a second set",
+  "hypothesis": "EMA 20/60 and neighboring speeds can improve development risk-adjusted trend-following performance across US/KR; selected candidate must then satisfy preregistered evaluation criteria against baseline and equal-weight buy-hold",
+  "selection_reason": "First backlog item; prior seed SMA50/200 OOS underperformed buy-hold, motivating faster EMA comparison without using new OOS to tune",
+  "prior_sets_and_lessons": [
+    "2026-11-09_sma_cross observed IS/OOS; source different and not numerically equivalent",
+    "This set initial Yahoo preparation failed before strategy execution; Toss24-symbol snapshot now revalidated"
+  ],
+  "markets": [
+    "US",
+    "KR"
+  ],
+  "engine_commit": "9bbe70c5e501f1b536dc8780232c5f5c37a5c66f",
+  "cargo_lock_sha256": "e656b52b1db78e2f2cfc5a8eafd7bd808a1f37b220a9e3d2b5a425aa835c0913",
+  "binary_sha256": "09a7fc6f6f00fb14d6986e368dca5795951aef82091e92b307b0c20a70fa893c",
+  "data_manifest_path": "private:toss-daily-revalidated/manifest.json",
+  "data_manifest_sha256": "a408e2c379be71be889dfc28952bf7f547f20ee08f30e22a477a45a827212622",
+  "snapshot_location": "private:toss-daily-revalidated",
+  "data_revalidation_sha256": "2c65f21d2a60cd58485eeb69bb58a474441f29b5be31967585b0bb045a73b777",
+  "provider": "toss",
+  "data_version_boundary": "Current-vintage Toss adjusted-price returns; not Yahoo dividend-reinvested total returns. Original source snapshots retained. Fixed-survivor universe; calendar completeness not certified.",
+  "coverage": "US/KR12 each;2015-01-02 to2026-11-09 except207940 begins2016-11-10; no imputation or omission",
+  "splits": {
+    "development": "engine IS date<=2022-12-31",
+    "evaluation": "engine OOS date>=2022-12-31; no actual boundary trading day because Saturday",
+    "boundary_verification": "src/backtest.rs split at pinned engine; costs US0.0005/KR0.0025 one-way turnover; next-bar position; available-asset equal weighting"
+  },
+  "holdout_status": "exposed",
+  "prior_oos_exposure": "Seed SMA historical OOS previously read. Same fixed split reused, not untouched holdout. New run IS and OOS are jointly computed/stored; ranking reads only IS. No claim of technical OOS isolation.",
+  "baseline": {
+    "run_id": "2026-11-10_ema_cross__baseline",
+    "parameters": {
+      "fast": 20,
+      "slow": 60
+    },
+    "signal": "ema(close, 20) > ema(close, 60)"
+  },
+  "variants": [
+    {
+      "run_id": "2026-11-10_ema_cross__v001",
+      "parameters": {
+        "fast": 10,
+        "slow": 30
+      },
+      "signal": "ema(close, 10) > ema(close, 30)"
+    },
+    {
+      "run_id": "2026-11-10_ema_cross__v002",
+      "parameters": {
+        "fast": 40,
+        "slow": 120
+      },
+      "signal": "ema(close, 40) > ema(close, 120)"
+    },
+    {
+      "run_id": "2026-11-10_ema_cross__v003",
+      "parameters": {
+        "fast": 50,
+        "slow": 200
+      },
+      "signal": "ema(close, 50) > ema(close, 200)"
+    }
+  ],
+  "search_order_or_adaptive_is_only_rule": "baseline,v001,v002,v003 only; no adaptive candidates",
+  "selection": {
+    "split": "IS",
+    "objective": "maximize arithmetic mean of US and KR IS sharpe as stored by engine (4 decimals)",
+    "tie_break": "then maximize mean IS cagr, then maximize mean IS mdd (less negative), then baseline first, then lexicographic run_id; exact Decimal comparisons of stored values"
+  },
+  "evaluation": {
+    "benchmark": "engine available-asset equal-weight buy-and-hold using same provider adjusted-price closes",
+    "metrics": [
+      "cagr",
+      "sharpe",
+      "mdd",
+      "excess_cagr"
+    ],
+    "accept_criteria": "selected OOS sharpe>0 in BOTH markets AND mean OOS excess_cagr>=0 AND mean selected OOS mdd>=mean baseline OOS mdd",
+    "reject_criteria": "if not accept: selected OOS excess_cagr<0 in BOTH markets AND mean selected OOS sharpe<=mean baseline OOS sharpe",
+    "defer_criteria": "all other successful research outcomes; never operational failure",
+    "precedence": "accept then reject then defer; no parameter changes after observation"
+  },
+  "budget": {
+    "max_attempts": 12,
+    "max_wall_minutes": 120,
+    "max_repairs": 3
+  },
+  "stop_conditions": "Run all four preregistered candidates; no performance early stop. Data/code drift, missing required metrics/universe, timeout/budget failure=>blocked/null. Failed strategy repair gets new immutable ID and consumes budget. Need baseline+>=2 distinct variants successful and all scheduled trials or protocol remains blocked.",
+  "revision_policy": "No post-observation changes; preserve failed data evidence and only add report addendum.",
+  "publication_policy": "raw/CSV/metrics/curves/selection numeric evidence private outside Git; public descriptors and SHA-256 only. No Toss performance in dashboard."
+}

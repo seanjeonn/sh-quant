@@ -1,0 +1,6 @@
+name = "EMA 50/200"
+hypothesis = "EMA 20/60 and neighboring speeds can improve development risk-adjusted trend-following performance across US/KR; selected candidate must then satisfy preregistered evaluation criteria against baseline and equal-weight buy-hold"
+tags = ["trend", "single", "set:2026-11-10_ema_cross"]
+parents = []
+source = "backlog"
+signal = "ema(close, 50) > ema(close, 200)"
