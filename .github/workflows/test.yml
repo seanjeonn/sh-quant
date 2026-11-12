@@ -1,0 +1,19 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Offline, synthetic fixtures only: no secrets, no market data, no model or account APIs.
+      - run: cargo test --locked
+      - run: python3 -m unittest discover -s tests -p 'test_*.py'
