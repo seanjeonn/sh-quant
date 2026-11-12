@@ -507,11 +507,13 @@ class Supervisor:
                 == [commit + '\trefs/heads/' + branch])
         require(self.git_bytes(worktree, 'show', commit + ':' + rel) == raw)
         pr = self.github('pr', number)
-        require(pr['url'] == url and pr['baseRefName'] == base and
-                pr['headRefName'] == branch and pr['headRefOid'] == commit)
-        if pr['state'] != 'OPEN':
-            # Archived after integration (#41): every identity check above still applies, and the
-            # exact published head must already be contained in remote main. Closed alone is not enough.
+        require(pr['url'] == url and pr['headRefName'] == branch and pr['headRefOid'] == commit)
+        if pr['state'] == 'OPEN':
+            require(pr['baseRefName'] == base)
+        else:
+            # Archived after integration (#41): the exact published head must already be contained in
+            # remote main. Closed alone is not enough. Its original base is not compared with the
+            # current checkout branch, which changes on a re-pin (#45).
             require(pr['state'] in ('CLOSED', 'MERGED'))
             require(self.github('compare', commit)['status'] in ('behind', 'identical'))
         files = pr['files']; require(type(files) is list and files)
