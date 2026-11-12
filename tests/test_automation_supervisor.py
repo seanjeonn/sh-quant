@@ -148,7 +148,7 @@ class PolicyTests(unittest.TestCase):
     def test_final_publication_requires_independent_remote_blob_pr_and_current_identity(self):
         from unittest.mock import patch
         for mutation in ('missing', 'remote', 'blob', 'pr_head', 'pr_base', 'pr_url', 'pr_files', 'valid',
-                         'closed_in_main', 'merged_in_main', 'closed_not_in_main', 'closed_diverged', 'draft_state'):
+                         'closed_in_main', 'closed_other_base', 'merged_in_main', 'closed_not_in_main', 'closed_diverged', 'draft_state'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
                 f=Fixture(tmp); sid='2026-11-10_synthetic_publication'
                 s=f.activate(verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='defer',attempt_count=3))
@@ -177,6 +177,8 @@ class PolicyTests(unittest.TestCase):
                 # #41: an archived PR is accepted only when its exact head is already contained in remote main.
                 if mutation.startswith('closed'): pr['state']='CLOSED'
                 if mutation=='merged_in_main': pr['state']='MERGED'
+                # #45: after a re-pin the core checkout is no longer on the archived PR's original base.
+                if mutation=='closed_other_base': pr['baseRefName']='feat/older-base'
                 if mutation=='draft_state': pr['state']='UNKNOWN'
                 compare=dict(closed_not_in_main='ahead',closed_diverged='diverged').get(mutation,'behind')
                 s.github_reader=lambda kind,number: dict(status=compare) if kind=='compare' else pr
@@ -188,7 +190,7 @@ class PolicyTests(unittest.TestCase):
                             started_epoch=s.day().timestamp(),policy_sha256=s.policy_sha256)
                 s.save_ledger(folder,ledger)
                 with patch.object(s,'git',side_effect=read):
-                    if mutation in ('missing','valid','closed_in_main','merged_in_main'):
+                    if mutation in ('missing','valid','closed_in_main','closed_other_base','merged_in_main'):
                         result=s.complete(folder,ledger,status)
                         self.assertEqual(ledger['status'],'publication_pending' if mutation=='missing' else 'completed')
                         self.assertIn('연구 대기' if mutation=='missing' else '연구 완료',result)
