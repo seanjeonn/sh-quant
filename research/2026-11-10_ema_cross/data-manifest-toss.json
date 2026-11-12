@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "provider": "toss",
+  "adjusted": true,
+  "status": "revalidated",
+  "private_manifest_alias": "private:toss-daily-revalidated/manifest.json",
+  "private_manifest_sha256": "a408e2c379be71be889dfc28952bf7f547f20ee08f30e22a477a45a827212622",
+  "revalidation_sha256": "2c65f21d2a60cd58485eeb69bb58a474441f29b5be31967585b0bb045a73b777",
+  "symbols": 24,
+  "prior_problem_dates_verified": 19,
+  "original_failed_evidence": "data-manifest.json and data-quality-audit.json retained unchanged",
+  "publication": "No raw quotes/CSV/curves/metrics; private evidence required for completion",
+  "limitations": [
+    "survivorship bias",
+    "no authoritative calendar guarantee",
+    "different provider adjustment/session/volume semantics",
+    "source acquisition uncommitted; all retained raw rows revalidated under pinned collector hash"
+  ]
+}

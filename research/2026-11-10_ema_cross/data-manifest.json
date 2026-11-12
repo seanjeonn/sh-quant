@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "set_id": "2026-11-10_ema_cross",
+  "prepared_at": "2026-11-10T13:18:30.167801+09:00",
+  "provider": "Yahoo chart API (existing engine source)",
+  "period1": 1420070400,
+  "period2": 1794284310,
+  "timezone": "Asia/Seoul",
+  "cutoff_exclusive": "2026-11-10",
+  "adjustment": "OHLC multiplied by adjclose/close; volume unchanged, same as pinned src/data.rs",
+  "quality_policy": "strict date ordering, finite positive OHLC, high/low bounds, nonnegative volume, >1500 rows, starts before 2017, last date 2026-11-09; null provider bars omitted per engine; same-date live bars excluded",
+  "snapshot_location": "data/cache/snapshot_2026-11-10_ema_cross",
+  "preparation_script_sha256": "02af2f6bcc07f8d562a0978ab8914fc94b7322672d65f38029ed4042811aafaa",
+  "entries": [
+    {
+      "market": "US",
+      "ticker": "SPY",
+      "symbol": "SPY",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/SPY?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:31.216270+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_SPY.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_SPY.yahoo.csv",
+      "sha256": "6ddd94f0b9cd131943d1e68a503203d1efac0eef1f8fdf259c65c1c20bf76d25",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_SPY.raw.json",
+      "raw_sha256": "69771cfd641cc85575c6a62fdfcdc7ddfe141adb51b454463ee105ed263274a1",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "QQQ",
+      "symbol": "QQQ",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/QQQ?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:31.213075+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_QQQ.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_QQQ.yahoo.csv",
+      "sha256": "299c198d26fc78d84939ba1fc12ca80f4fbf97b2702d1bc7b377c5e2b11a4078",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_QQQ.raw.json",
+      "raw_sha256": "e0f061de243b6768000884ae8f8be7fe24a7452d29ff061eb921531e84760df5",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "AAPL",
+      "symbol": "AAPL",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/AAPL?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:31.212763+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_AAPL.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_AAPL.yahoo.csv",
+      "sha256": "c22fb2d6ce5ebb8d2e79ac04d960eb6e8c5c612ff460a6e97672e60550d61a3f",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_AAPL.raw.json",
+      "raw_sha256": "f81c818ef86cbebfbca388d85be1609bc116e6cb1d80eb9e25d86ef12918da26",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "MSFT",
+      "symbol": "MSFT",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/MSFT?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:31.241748+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_MSFT.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_MSFT.yahoo.csv",
+      "sha256": "7c5126034de18233bc14104bae981114c4b478592837c39cb5ddfb3f8098c186",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_MSFT.raw.json",
+      "raw_sha256": "308f35d722c44ae524b62ffb0521ca7d1b3c1e473224b438fc62a07dcc0627d2",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "NVDA",
+      "symbol": "NVDA",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/NVDA?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:32.193141+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_NVDA.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_NVDA.yahoo.csv",
+      "sha256": "cafc8921d2b324c6df9a1ba4796d17a7a0cf1dbf86f601cd667f6bba21651d3a",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_NVDA.raw.json",
+      "raw_sha256": "e3d68a7ae9a34a8df697c31490813dd4cf2f2ec50d2590768e2ce0583e6cd6d5",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "AMZN",
+      "symbol": "AMZN",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/AMZN?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:32.135316+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_AMZN.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_AMZN.yahoo.csv",
+      "sha256": "266b9484ca864a224885f2facc04782ab44f42f83740e1d7cba8f24d6e4e602d",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_AMZN.raw.json",
+      "raw_sha256": "54aaa56fb0562a0365a42738e89a332f7f9e81ab26223c833b7232ba0d8c9269",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "GOOGL",
+      "symbol": "GOOGL",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/GOOGL?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:32.218675+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_GOOGL.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_GOOGL.yahoo.csv",
+      "sha256": "6608cc01d24d75e793430459e1a1907025975008caab69ba51ce22e967043cfa",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_GOOGL.raw.json",
+      "raw_sha256": "81f7f839aa248e6b0b6254841d345b10b4a7fd940244f1059b428895ccd9bba1",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "META",
+      "symbol": "META",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/META?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:32.167154+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_META.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_META.yahoo.csv",
+      "sha256": "d14e0223425710e51006eb3eb7b6a77cc8f8274e7f94fd6d62862ba93df28002",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_META.raw.json",
+      "raw_sha256": "fa1d89814221066a436682689355f82281eb9401c493a6518ef3ce23e0db5f91",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "JPM",
+      "symbol": "JPM",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/JPM?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:33.132199+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_JPM.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_JPM.yahoo.csv",
+      "sha256": "f053a58a461b19cf07b7e801ab70de6049cf259021cb90f67b215881529e93d9",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_JPM.raw.json",
+      "raw_sha256": "eae2532f3bec7e3213a521c12300c55766f827bc86cc6e9760e8c54810cdf3eb",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XOM",
+      "symbol": "XOM",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/XOM?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:33.164099+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_XOM.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_XOM.yahoo.csv",
+      "sha256": "6ac2c1db42d51ab258964b3c0aa64f2a3fa54f3d2dd97b5ee2a90ea14ccb3214",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_XOM.raw.json",
+      "raw_sha256": "eec5c037e739774f91ab10ebf8411111fbd6898ca5ad41cb1939fe923b12fc98",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "JNJ",
+      "symbol": "JNJ",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/JNJ?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:33.500801+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_JNJ.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_JNJ.yahoo.csv",
+      "sha256": "649fec3e3b4925df632e6a9f5f0fa9c96d5fdbb8643c02f5ed74605b032beea2",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_JNJ.raw.json",
+      "raw_sha256": "d4ba11e4b56c792acbe25775f103244b30353ba5e274a5fe2ade230e89e39faa",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "BRK-B",
+      "symbol": "BRK-B",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/BRK-B?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:33.210112+09:00",
+      "rows": 2981,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 0,
+      "current_date_bars_excluded": 0,
+      "cache_path": "data/cache/US_BRK-B.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/US_BRK-B.yahoo.csv",
+      "sha256": "f164cd6b3098a1742546025b97de89453c9dc3c9e100fbf9653f4ed86f02c900",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/US_BRK-B.raw.json",
+      "raw_sha256": "96b9763319e52df6e63695e904b63dab733e15930f5ccfc29451e4f77408a3e5",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "069500",
+      "symbol": "069500.KS",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/069500.KS?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:33.968902+09:00",
+      "rows": 2876,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 29,
+      "current_date_bars_excluded": 1,
+      "cache_path": "data/cache/KR_069500.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/KR_069500.yahoo.csv",
+      "sha256": "1676de202c9f1bb3ea946c8284d452b108cbf8c2ec145ea1289833d6becd941c",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_069500.raw.json",
+      "raw_sha256": "7dc1f42301863afd7cfffd714667ed72982b5efcac12ffce9e669d1c1cc00a62",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "005930",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000660",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "207940",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "005380",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000270",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "035420",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "051910",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "006400",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "105560",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "055550",
+      "status": "failed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": ""
+        },
+        {
+          "attempt": 3,
+          "status": "failed",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "035720",
+      "symbol": "035720.KS",
+      "url": "https://query2.finance.yahoo.com/v8/finance/chart/035720.KS?period1=1420070400&period2=1794284310&interval=1d&events=div%2Csplit",
+      "received_at": "2026-11-10T13:18:52.199760+09:00",
+      "rows": 2904,
+      "first": "2015-01-02",
+      "last": "2026-11-09",
+      "null_or_nonpositive_skipped": 1,
+      "current_date_bars_excluded": 1,
+      "cache_path": "data/cache/KR_035720.yahoo.csv",
+      "snapshot_csv": "data/cache/snapshot_2026-11-10_ema_cross/KR_035720.yahoo.csv",
+      "sha256": "b4a5fce0e7d0069b620dbce15512ed672a0a45a93abc7de516e5ee7e0f6ffb98",
+      "raw_path": "data/cache/snapshot_2026-11-10_ema_cross/KR_035720.raw.json",
+      "raw_sha256": "ae05fad328c085caac728195d2c7b4268fdfa35d1b06d1fe180f0a641025c2b8",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "expected_count": 24,
+  "validated_count": 14,
+  "failed_count": 10,
+  "limitations": [
+    "Fixed current universe is survivorship-biased; 207940 begins after 2015.",
+    "Yahoo adjusted prices are a current-vintage revision, not point-in-time.",
+    "Freshness relies on same-KST-date mtime; verify hashes and freshness before/after every run.",
+    "No exchange calendar completeness guarantee; missing provider dates are not imputed."
+  ]
+}

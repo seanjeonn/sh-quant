@@ -1,4 +1,5 @@
-//! Fixed universe + cached daily OHLCV from Yahoo's chart API. Agents must not edit this file.
+//! Fixed universe + cached daily OHLCV from Yahoo's chart API.
+//! Research-mode agents must not edit this file; approved engineering changes use a separate branch.
 
 use std::fs;
 use std::path::{Path, PathBuf};
