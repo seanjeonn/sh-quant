@@ -255,6 +255,24 @@ from unittest import mock
 
 
 class ProcessTests(EngineFixture):
+    @contextlib.contextmanager
+    def wait_runner(self, timeout=8):
+        """Wait for actual worker lock release, never retry recovery itself."""
+        deadline = time.monotonic() + timeout
+        with contextlib.ExitStack() as stack:
+            while True:
+                try:
+                    runner = stack.enter_context(r.Runner(
+                        self.registry, self.plan['set_id'], launch=self.launch))
+                except r.Blocked as error:
+                    remaining = deadline - time.monotonic()
+                    if str(error) != 'worker_busy' or remaining <= 0:
+                        raise
+                    time.sleep(min(.02, remaining))
+                else:
+                    break
+            yield runner
+
     def worker(self, script, timeout=None):
         code = ('import sys, subprocess; sys.path.insert(0, ' + repr(str(ROOT / 'tools')) + '); '
                 'import research_set as r; '
@@ -274,29 +292,32 @@ class ProcessTests(EngineFixture):
         self.fail('synthetic child did not start')
 
     def test_sigkill_parent_keeps_orphan_lock_and_recovers_without_duplicate(self):
-        write(self.mock, ('import time\ntime.sleep(1.2)\n' + MOCK_ENGINE).encode())
+        # Delay beyond the former 1.4s wait to reproduce slow worker release (#47).
+        write(self.mock, ('import time\ntime.sleep(3)\n' + MOCK_ENGINE).encode())
         self.init()
         with r.Runner(self.registry, self.plan['set_id']) as runner: self.checkpoint(runner, 'plan')
         parent = self.worker(self.mock)
         self.addCleanup(lambda: parent.poll() is None and parent.kill())
         child_pid = self.wait_child(); parent.kill(); parent.wait(timeout=3)
-        with self.assertRaises(r.Blocked):
+        with self.assertRaisesRegex(r.Blocked, '^worker_busy$'):
             with r.Runner(self.registry, self.plan['set_id']): pass
-        # Do not signal a PID read from disk. The mock terminates itself.
-        time.sleep(1.4)
-        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+        # Do not signal a PID read from disk. Observe the worker releasing its lock.
+        with self.wait_runner() as runner:
             runner.step()
             self.assertEqual(runner.status()['attempt_count'], 1)
             self.assertEqual(len(runner.successes()), 1)
 
     def test_sigkill_interrupted_attempt_uses_new_repair_id(self):
-        write(self.mock, b'import time,os\ntime.sleep(.8)\nos._exit(9)\n')
+        # Delay beyond the former 1s wait, including failed-engine recovery.
+        write(self.mock, b'import time,os\ntime.sleep(3)\nos._exit(9)\n')
         self.init()
         with r.Runner(self.registry, self.plan['set_id']) as runner: self.checkpoint(runner, 'plan')
         parent = self.worker(self.mock)
         self.addCleanup(lambda: parent.poll() is None and parent.kill())
-        self.wait_child(); parent.kill(); parent.wait(timeout=3); time.sleep(1)
-        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+        self.wait_child(); parent.kill(); parent.wait(timeout=3)
+        with self.assertRaisesRegex(r.Blocked, '^worker_busy$'):
+            with r.Runner(self.registry, self.plan['set_id']): pass
+        with self.wait_runner() as runner:
             runner.step()
             self.assertEqual(runner.ends()[runner.starts()[0]['run_id']]['status'], 'interrupted')
             write(self.mock, MOCK_ENGINE.encode()); runner.step()
