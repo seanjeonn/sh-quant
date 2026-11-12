@@ -507,8 +507,13 @@ class Supervisor:
                 == [commit + '\trefs/heads/' + branch])
         require(self.git_bytes(worktree, 'show', commit + ':' + rel) == raw)
         pr = self.github('pr', number)
-        require(pr['url'] == url and pr['state'] == 'OPEN' and pr['baseRefName'] == base and
+        require(pr['url'] == url and pr['baseRefName'] == base and
                 pr['headRefName'] == branch and pr['headRefOid'] == commit)
+        if pr['state'] != 'OPEN':
+            # Archived after integration (#41): every identity check above still applies, and the
+            # exact published head must already be contained in remote main. Closed alone is not enough.
+            require(pr['state'] in ('CLOSED', 'MERGED'))
+            require(self.github('compare', commit)['status'] in ('behind', 'identical'))
         files = pr['files']; require(type(files) is list and files)
         names = [entry['path'] for entry in files]
         require(len(names) == len(set(names)) and rel in names)
@@ -697,10 +702,13 @@ Frozen private evidence (never publish paths or market values):
         reader = getattr(self, 'github_reader', None)
         if reader is not None:
             return reader(kind, number)
-        fields = ('number,url,body,state' if kind == 'issue' else
-                  'url,state,baseRefName,headRefName,headRefOid,files')
-        result = subprocess.run(['gh', kind, 'view', str(number), '--repo', 'seanjeonn/sh-quant',
-                                 '--json', fields], capture_output=True, timeout=30)
+        if kind == 'compare':  # status of commit `number` relative to main: behind/identical = contained
+            command = ['gh', 'api', 'repos/seanjeonn/sh-quant/compare/main...' + number, '--jq', '{status}']
+        else:
+            fields = ('number,url,body,state' if kind == 'issue' else
+                      'url,state,baseRefName,headRefName,headRefOid,files')
+            command = ['gh', kind, 'view', str(number), '--repo', 'seanjeonn/sh-quant', '--json', fields]
+        result = subprocess.run(command, capture_output=True, timeout=30)
         require(result.returncode == 0)
         return decode(result.stdout)
 
