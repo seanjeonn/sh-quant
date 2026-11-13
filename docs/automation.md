@@ -48,10 +48,30 @@
 6. deadline/횟수/시간 초과는 blocked다. 데이터/모델 실패도 무제한 반복하지 않는다. 해제는 원인 확인과 명시적 운영 조치가 필요하다.
 7. weekly는 private receipt의 `managed_issue_urls` 및 같은 URL 집합의 `managed_issue_body_sha256`을 검사하고, 관리 저장소 각 issue의 실제 identity/body를 독립 조회해 해시를 대조한 뒤 확인 건수만 전달한다. URL 형식이나 agent 주장만으로 검증 완료라고 하지 않으며, 조회 확인을 실제 수정/조치 완료로 부풀리지 않는다. 반복 invocation은 같은 주에 재작업하지 않는다.
 
+## 시작 경합·진단·복구 경계 — #48 / #44
+
+- `continue`는 신뢰된 당일 ledger가 없으면 **worker lock을 열기 전** 조용히 종료하며, lock 획득 후에도 같은 조건을 재검사한다. 날짜 디렉터리/ledger 경로의 symlink·권한 오류는 idle로 숨기지 않는다. 시작 시각 전 tick도 새 날짜/registry/수집을 만들지 않는다.
+- 당일 worker가 실제 kernel lock을 소유하면 `continue`는 오류 알림 대신 빈 stdout과 private `lock_busy` 진단을 남긴다. `daily`만 최대 **1초** 짧게 재획득을 기다린다. live owner/상속된 worker를 죽이거나 lock 파일을 교체·해제하지 않으며, SIGKILL 뒤 자식의 동일 open-file-description exclusivity도 유지한다.
+- `deadline`은 당일 ledger가 없을 때 17:00 전에는 조용히 종료하지만, 17:00 이후에는 **`연구 차단 YYYY-MM-DD`**와 `missing_day_deadline` 진단을 남긴다. 성공/완료/가짜 day ledger를 생성하지 않는다.
+- 진단은 검증된 private root의 `diagnostics/<random>.json`에 독점 생성/fsync하는 불변 0600 파일이다(디렉터리0700). 필드는 `schema_version`, allowlist `mode`(파싱 실패는 `unknown`), KST `date`, allowlist `stage/outcome/reason`, epoch `timestamp`뿐이다. `started`는 실행 진입 증거일 뿐 완료 증거가 아니며, 최종 outcome과 구분한다. `lock_busy`, `config_validation`, `pin_validation`, `canary_validation`을 구분하며 예외 문자열·명령 인자·로컬 경로·raw stdout/stderr·시세·인증정보를 넣지 않는다.
+- 생성자 실패도 stage별로 기록한다. config가 검증되기 전 sink는 **활성 `HERMES_HOME`의 `profiles/investops/private/automation`**만 허용하며, invalid config의 profile/private_root로 우회하지 않는다. 이 경로가 없거나 신뢰/권한/쓰기 검증에 실패하면 작업은 fail-closed다. 다른 profile에 fallback 파일을 쓰지 않는다. 정상 실행도 durable 시작 진단을 쓰기 전에 worker 작업을 시작하지 않는다.
+
+### 보수적 manual-only 복구 (같은 날 CLI retry 미지원)
+
+이 수정은 재시도 프레임워크/자동 continuation 초기화를 추가하지 않는다. **유효한 config의 `daily`가 시작 시각 이후 ledger 생성 전에 실패하면**, 처음 기록한 시도 시작 epoch·정책 해시와 `manual_only`를 profile 고정 `private/automation/failed-starts/YYYY-MM-DD.json`에 불변 보존한다. config의 private_root를 옮기거나 정책을 바꿔도 이 anchor를 바꾸지 않는다. invalid profile/config 생성자 실패에는 정책 marker를 쓰지 않고 안전한 진단만 남긴다.
+
+**marker가 있고 ledger가 없으면 같은 날 모든 후속 `daily` 시작을 차단한다.** 15:00 전의 명시적 CLI 호출도 재시도로 허용하지 않으며, 15:00 이후/23:00 re-pin도 예외가 아니다. marker 삭제·이름 변경·새 root로 우회하거나 ledger/수집 카운터를 재생성하는 복구 절차는 제공하지 않는다. 운영자는 원인을 검토하고 blocked incident를 별도 메타데이터로 기록하며, 새 정책/source pin과 실제 canary를 검증한 뒤 **다음 날** 정상 시작을 평가한다. invalid config로 marker가 없었던 실패/과거 generic 실패도 안전한 재시도 가능의 증거가 아니므로 운영자가 먼저 기존 기록·프로세스·부분 디렉터리·registry를 검토해야 한다.
+
+기존 유효한 ledger가 있으면 원래의 pending/publication/completed/blocked 검증·재개 규칙과 최초 started_epoch·launch/수집 카운터·벽시계 예산을 그대로 따른다. partial day directory/수집 흔적은 보존하며 새 ledger로 초기화하지 않는다. 실패 marker도 없고 기존 흔적도 없는 **첫** catch-up `daily`에는 기존 시작/17:00 deadline 정책이 적용되지만 재시도 허가는 아니다. 이 구현에는 1회 operator retry 플래그·15:00 retry cutoff 확장·wall-budget epoch 이식 기능이 없으며, 더 느슨한 재시작을 승인하지 않는다.
+
+### 과거 사고에 대한 증거 수준
+
+2026-11-12 14:30의 daily generic 오류와 동시 continuation의 빈 출력/ledger 부재는, idle guard보다 먼저 global nonblocking flock을 잡던 순서 및 실제 kernel 합성 재현과 일치한다. 따라서 시작 lock race는 **강하게 지지되는 원인**이나, 과거 오류는 generic 진단뿐이므로 그 사고의 유일 원인으로 확정하지 않는다. 이 수정의 합성 검증은 실제 시장/모델 실행이나 오늘의 연구 완료를 뜻하지 않는다.
+
 ## Canary와 활성화 순서
 
 1. supervisor config activation=false, job은 **paused**로 생성한다. 반복 예약을 먼저 켜지 않는다.
-2. canary는 기존 synthetic registry의 verify/attempt_count를 전후 대조하고, 제한된 실제 Hermes CLI를 읽기 전용으로 호출한다. 모델이 nonce를 정확히 반환하고 실제 검증이 통과해야 private canary receipt를 쓴다. 새 시세/API/전략 trial은 수행하지 않는다.
+2. canary는 기존 synthetic registry의 verify/attempt_count를 전후 대조하고, 제한된 실제 Hermes CLI를 읽기 전용으로 호출한다. 모델이 nonce를 정확히 반환하고 실제 검증이 통과해야 private canary receipt를 쓴다. 새 시세/API/전략 trial은 수행하지 않는다. 운영 re-pin에서는 선택적 `canary_generation`(안전한 8–100자 식별자)을 명시해 `canaries/<generation>/receipt.json`과 새 invocation 로그를 분리한다. 생략 시 기존 legacy 경로를 유지한다. 이전 config/receipt/log를 덮어쓰거나 이동하지 않으며, 실패 generation은 자동 재시도/이름 변경으로 숨기지 않는다. 새 generation은 버전 전환을 승인한 운영자가 선택하고 정책 해시에 포함한다.
 3. cron의 `run`을1회 실행한다. 실제 출력 marker의 nonce, run ledger/status와 Discord 메시지를 읽어 같은 실행의 전달 성공을 확인한다. 도구 호출 성공만으로 전달 성공을 주장하지 않는다.
 4. 코드/설정/정책이 canary와 일치하는지 다시 확인한 뒤 activation을 바꾸고 반복 job을 resume한다. 이후 timezone/next_run_at/script/delivery/enabled 상태를 read-back한다.
 5. 초기 실제 daily 연구는 다음 KST 일자의 예약 시점부터다. 지금의 synthetic/transport 검증으로 미래의 매일 성공을 보장하지 않는다.

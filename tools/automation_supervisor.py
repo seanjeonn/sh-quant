@@ -96,7 +96,9 @@ def read_json(p):
 def mkdir(p):
     p = private(p, directory=True, missing=True)
     if not p.exists():
-        p.mkdir(mode=0o700); sync_dir(p.parent)
+        try: p.mkdir(mode=0o700)
+        except FileExistsError: private(p, directory=True)
+        sync_dir(p.parent)
     return p
 
 
@@ -119,11 +121,43 @@ FIELDS = PATHS | set(LIMITS) | {'schema_version', 'engine_commit', 'binary_sha25
          'min_interval', 'activation', 'canary'}
 
 
+MODES = ('canary', 'daily', 'continue', 'weekly', 'deadline', 'publication')
+STAGES = ('arguments', 'config_validation', 'pin_validation', 'canary_validation',
+          'ready', 'preflight', 'lock', 'daily', 'weekly', 'canary', 'publication')
+REASONS = set(STAGES) | {'lock_busy', 'idle_continue', 'missing_day_deadline',
+                             'ok', 'preledger_failure_manual_only'}
+
+
 class Supervisor:
+    def diagnostic_root(self):
+        if hasattr(self, '_trusted_root'):
+            return private(self._trusted_root, directory=True)
+        # No config-controlled fallback on constructor failure. In particular,
+        # invalid profile/private_root values must never redirect a write.
+        profile = path(os.environ['HERMES_HOME'], directory=True)
+        require(profile.parts[-2:] == ('profiles', 'investops'))
+        private(profile / 'private', directory=True)
+        return private(profile / 'private' / 'automation', directory=True)
+
+    def diagnostic(self, mode, outcome, reason):
+        require(outcome in ('started', 'blocked', 'quiet', 'ok') and reason in REASONS)
+        folder = mkdir(self.diagnostic_root() / 'diagnostics')
+        now = self.day() if hasattr(self, 'now') else dt.datetime.now(ZoneInfo('Asia/Seoul'))
+        stage = getattr(self, 'stage', 'arguments')
+        require(stage in STAGES)
+        immutable(folder / (uuid.uuid4().hex + '.json'), encode(dict(
+            schema_version=1, mode=mode if mode in MODES else 'unknown',
+            date=now.date().isoformat(), stage=stage, outcome=outcome,
+            reason=reason, timestamp=now.timestamp())))
+        self._diagnosed = True
+
     def __init__(self, config, *, now=None, executor=None, verifier=None, auditor=None):
+        self.stage = 'config_validation'
         self.config_path = str(private(config))
         self.c = c = read_json(config)
-        require(isinstance(c, dict) and FIELDS <= c.keys() and not c.keys() - FIELDS - {'legacy_completed'})
+        require(isinstance(c, dict) and FIELDS <= c.keys() and not c.keys() - FIELDS - {'legacy_completed', 'canary_generation'})
+        if 'canary_generation' in c:
+            require(type(c['canary_generation']) is str and re.fullmatch('[A-Za-z0-9_-]{8,100}', c['canary_generation']))
         require(type(c['schema_version']) is int and c['schema_version'] == 1)
         require(type(c['activation']) is bool)
         for name, maximum in LIMITS.items():
@@ -181,7 +215,11 @@ class Supervisor:
         self.executor = executor
         self.verifier = verifier
         self.auditor = auditor
+        self._policy_root = private(profile / 'private' / 'automation', directory=True)
+        self._trusted_root = self.root
+        self.stage = 'pin_validation'
         self.check_pins()
+        self.stage = 'ready'
 
     def git(self, repo, *args):
         return self.git_bytes(repo, *args).decode().strip()
@@ -213,8 +251,16 @@ class Supervisor:
                 if (Path(repo) / name).exists(): actual.add(name)
             require(actual == set(c['code_pins']))
 
+    def canary_paths(self):
+        generation = self.c.get('canary_generation')
+        if generation is None:
+            return self.root / 'canary-receipt.json', self.root / 'canary'
+        folder = self.root / 'canaries' / generation
+        return folder / 'receipt.json', folder
+
     def validate_canary_receipt(self):
-        receipt = read_json(self.root / 'canary-receipt.json')
+        receiptpath, folder = self.canary_paths()
+        receipt = read_json(receiptpath)
         require(set(receipt) == {'schema_version', 'passed', 'nonce', 'policy_sha256', 'supervisor_sha256',
                                 'runner_state', 'attempt_count', 'verified_at', 'invocation'})
         require(type(receipt['schema_version']) is int and receipt['schema_version'] == 1)
@@ -222,7 +268,7 @@ class Supervisor:
                 receipt['policy_sha256'] == self.policy_sha256 and receipt['supervisor_sha256'] == self.c['supervisor_sha256'])
         require(receipt['runner_state'] == 'completed' and type(receipt['attempt_count']) is int and receipt['attempt_count'] >= 0)
         require(type(receipt['invocation']) is str and re.fullmatch('invocation-[a-f0-9]{32}', receipt['invocation']))
-        inv = private(self.root / 'canary' / receipt['invocation'], directory=True)
+        inv = private(folder / receipt['invocation'], directory=True)
         start = read_json(inv / 'start.json'); end = read_json(inv / 'end.json')
         require(start['kind'] == 'canary' and start['policy_sha256'] == self.policy_sha256)
         require(type(end['exit_code']) is int and end['exit_code'] == 0 and end['timed_out'] is False)
@@ -233,6 +279,7 @@ class Supervisor:
         return receipt
 
     def activated(self):
+        self.stage = 'canary_validation'
         require(self.c['activation'])
         self.validate_canary_receipt()
 
@@ -317,11 +364,13 @@ class Supervisor:
         return self.launch(folder, mode, argv, cwd, limit)
 
     def canary(self):
-        receiptpath = self.root / 'canary-receipt.json'
+        receiptpath, folder = self.canary_paths()
         if receiptpath.exists():
             self.validate_canary_receipt()
             return ''
-        folder = self.root / 'canary'
+        if 'canary_generation' in self.c:
+            parent = private(folder.parent, directory=True, missing=True)
+            if not parent.exists(): mkdir(parent)
         require(not folder.exists())  # an interrupted/failed canary needs operator review
         mkdir(folder)
         can = self.c['canary']
@@ -775,19 +824,106 @@ An empty list is valid if there is nothing to file; do not fabricate work. stdou
                                                   'ended_epoch': self.day().timestamp()}))
             return '주간 검토 차단'
 
+    def day_ledger_exists(self):
+        folder = path(self.root / self.day().date().isoformat(), directory=True, missing=True)
+        if not folder.exists(): return False
+        private(folder, directory=True)
+        return private(folder / 'ledger.json', missing=True).exists()
+
+    def failed_start_path(self):
+        root = private(self._policy_root, directory=True)
+        folder = path(root / 'failed-starts', directory=True, missing=True)
+        target = folder / (self.day().date().isoformat() + '.json')
+        if folder.exists():
+            private(folder, directory=True)
+            private(target, missing=True)
+        return target
+
+    def record_failed_start(self, mode):
+        # Manual-only recovery: no retry flag, no new ledger, no budget reset.
+        # A constructor which has not validated the whole config may only emit
+        # diagnostics to active HERMES_HOME, never a config-derived policy marker.
+        if mode != 'daily' or not hasattr(self, '_trusted_root'): return
+        now = self.day()
+        if now.strftime('%H:%M') < self.c['daily_start']: return
+        if (self.root / now.date().isoformat() / 'ledger.json').exists(): return
+        target = self.failed_start_path()
+        mkdir(target.parent)
+        if target.exists():
+            read_json(target)  # never overwrite even for a new policy
+            return
+        try:
+            immutable(target, encode(dict(schema_version=1, date=now.date().isoformat(),
+                started_epoch=getattr(self, '_attempt_epoch', now.timestamp()),
+                policy_sha256=self.policy_sha256, recovery='manual_only')))
+        except FileExistsError:
+            read_json(target)  # concurrent first writer owns the immutable marker
+
     def run(self, mode):
-        require(mode in ('canary', 'daily', 'continue', 'weekly', 'deadline', 'publication'))
-        if mode == 'publication': return self.publication()
+        self._attempt_epoch = self.day().timestamp()
+        self._diagnosed = False
+        try:
+            require(mode in MODES)
+            self.stage = 'preflight'
+            # Validate the evidence sink before doing any work. Failure is not
+            # permission to continue without durable, profile-local evidence.
+            self.diagnostic(mode, 'started', 'ok')
+            self._diagnosed = False
+            status = self._run(mode)
+            if not self._diagnosed:
+                blocked = type(status) is str and '차단' in status
+                self.diagnostic(mode, 'blocked' if blocked else 'ok', self.stage if blocked else 'ok')
+            return status
+        except (Exception, KeyboardInterrupt):
+            self.record_failed_start(mode)
+            if not self._diagnosed:
+                self.diagnostic(mode, 'blocked', self.stage)
+            raise
+
+    def _run(self, mode):
+        if mode == 'publication':
+            self.stage = 'publication'
+            return self.publication()
+        # Read-only preflight: an idle tick must never contend with daily start.
+        # Repeat under the lock below; only daily may initialize a day.
+        if mode == 'continue' and not self.day_ledger_exists():
+            self.diagnostic(mode, 'quiet', 'idle_continue')
+            return ''
+        if mode == 'deadline' and not self.day_ledger_exists():
+            late = self.day().hour >= 17
+            self.diagnostic(mode, 'blocked' if late else 'quiet', 'missing_day_deadline')
+            return '연구 차단 ' + self.day().date().isoformat() if late else ''
+        self.stage = 'lock'
         lock = private(self.root / '.supervisor.lock', missing=True)
         self.lock_fd = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
-            try: fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError: raise Blocked('blocked') from None
+            until = time.monotonic() + (1.0 if mode == 'daily' else 0)
+            while True:
+                try:
+                    fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    remaining = until - time.monotonic()
+                    if mode == 'daily' and remaining > 0:
+                        time.sleep(min(.05, remaining))
+                        continue
+                    self.diagnostic(mode, 'quiet' if mode == 'continue' else 'blocked', 'lock_busy')
+                    if mode == 'continue': return ''
+                    raise Blocked('blocked') from None
+            self.stage = 'pin_validation'
             self.check_pins()
-            if mode == 'canary': return self.canary()
-            if mode == 'continue' and not (self.root / self.day().date().isoformat() / 'ledger.json').exists():
+            if mode == 'canary':
+                self.stage = 'canary'
+                return self.canary()
+            if mode == 'continue' and not self.day_ledger_exists():
+                self.diagnostic(mode, 'quiet', 'idle_continue')
                 return ''
+            if mode == 'daily' and not self.day_ledger_exists() and self.failed_start_path().exists():
+                read_json(self.failed_start_path())
+                self.diagnostic(mode, 'blocked', 'preledger_failure_manual_only')
+                return '연구 차단 ' + self.day().date().isoformat()
             self.activated()
+            self.stage = 'weekly' if mode == 'weekly' else 'daily'
             if mode != 'weekly': return self.daily(mode)
             return self.weekly()
         finally:
@@ -803,12 +939,17 @@ class SafeParser(argparse.ArgumentParser):
 
 
 def main(argv=None):
+    supervisor = Supervisor.__new__(Supervisor)
+    mode = 'unknown'
     try:
         parser = SafeParser(description=__doc__)
         parser.add_argument('--config', required=True, help='absolute private JSON configuration')
         parser.add_argument('--mode', required=True, choices=('canary', 'daily', 'continue', 'weekly', 'deadline', 'publication'))
         args = parser.parse_args(argv)
-        status = Supervisor(args.config).run(args.mode)
+        mode = args.mode
+        supervisor._attempt_epoch = time.time()
+        supervisor.__init__(args.config)
+        status = supervisor.run(mode)
         if args.mode == 'publication':
             require(type(status) is bytes)
             sys.stdout.buffer.write(status)
@@ -820,6 +961,12 @@ def main(argv=None):
         if status: print(status)
         return 1 if '차단' in status else 0
     except (Exception, KeyboardInterrupt):
+        try:
+            supervisor.record_failed_start(mode)
+            if not getattr(supervisor, '_diagnosed', False):
+                supervisor.diagnostic(mode, 'blocked', getattr(supervisor, 'stage', 'arguments'))
+        except (Exception, KeyboardInterrupt):
+            pass  # fail closed; never fall back to config paths or raw errors
         print('자동화 차단')
         return 1
 

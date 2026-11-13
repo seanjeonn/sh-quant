@@ -125,6 +125,326 @@ def module():
 
 
 class PolicyTests(unittest.TestCase):
+    def test_idle_continue_does_not_open_or_acquire_worker_lock(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor()
+            with patch.object(f.m.fcntl, 'flock', side_effect=AssertionError('idle stole lock')):
+                self.assertEqual(s.run('continue'), '')
+            self.assertFalse((f.auto / '.supervisor.lock').exists())
+            self.assertFalse((f.auto / '2026-11-10').exists())
+
+    def test_concurrent_diagnostic_directory_creation_does_not_block_idle_tick(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor(); original = Path.mkdir
+            def concurrent(p, *args, **kwargs):
+                if p == f.auto / 'diagnostics':
+                    original(p, *args, **kwargs)
+                    raise FileExistsError('another invocation created private directory')
+                return original(p, *args, **kwargs)
+            with patch.object(Path, 'mkdir', concurrent):
+                self.assertEqual(s.run('continue'), '')
+            self.assertFalse((f.auto / '.supervisor.lock').exists())
+
+    def test_kernel_overlap_continue_first_and_daily_first_without_workers(self):
+        from unittest.mock import patch
+        for first in ('continue', 'daily'):
+            with self.subTest(first=first), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp); s = f.supervisor(); folder = f.auto / '2026-11-10'
+                ready_r, ready_w = os.pipe(); release_r, release_w = os.pipe()
+                original_diagnostic = s.diagnostic
+                def diagnostic(mode, outcome, reason):
+                    original_diagnostic(mode, outcome, reason)
+                    if mode == 'continue' and reason == 'idle_continue':
+                        os.write(ready_w, b'1'); os.read(release_r, 1)
+                def daily(mode):
+                    folder.mkdir(mode=0o700)
+                    s.save_ledger(folder, dict(schema_version=1, date=folder.name, status='pending',
+                        launches=2, acquisition_attempts=1, started_epoch=s.day().timestamp(), policy_sha256=s.policy_sha256))
+                    if first == 'daily':
+                        os.write(ready_w, b'1'); os.read(release_r, 1)
+                    return ''
+                pid = os.fork()
+                if pid == 0:
+                    try:
+                        with patch.object(s, 'diagnostic', side_effect=diagnostic), \
+                                patch.object(s, 'activated', return_value=None), patch.object(s, 'daily', side_effect=daily):
+                            s.run(first)
+                        os._exit(0)
+                    except BaseException: os._exit(1)
+                try:
+                    import select
+                    self.assertTrue(select.select([ready_r], [], [], 5)[0], 'child did not reach barrier')
+                    self.assertEqual(os.read(ready_r, 1), b'1')
+                    if first == 'continue':
+                        with patch.object(s, 'activated', return_value=None), patch.object(s, 'daily', side_effect=daily):
+                            self.assertEqual(s.run('daily'), '')
+                    else:
+                        before = (folder / 'ledger.json').read_bytes()
+                        self.assertEqual(s.run('continue'), '')
+                        self.assertEqual((folder / 'ledger.json').read_bytes(), before)
+                    ledger = f.m.read_json(folder / 'ledger.json')
+                    self.assertEqual((ledger['status'], ledger['launches'], ledger['acquisition_attempts']), ('pending', 2, 1))
+                    os.write(release_w, b'1')
+                    self.assertEqual(os.waitpid(pid, 0)[1], 0); pid = None
+                finally:
+                    if pid is not None:
+                        os.kill(pid, signal.SIGKILL); os.waitpid(pid, 0)
+                    for fd in (ready_r, ready_w, release_r, release_w): os.close(fd)
+
+    def test_continue_rechecks_missing_ledger_under_lock(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor(); folder = f.m.mkdir(f.auto / '2026-11-10')
+            f.m.immutable(folder / 'ledger.json', b'{}\n')
+            with patch.object(s, 'check_pins', side_effect=lambda: (folder / 'ledger.json').unlink()), \
+                    patch.object(s, 'activated', side_effect=AssertionError('must recheck')):
+                self.assertEqual(s.run('continue'), '')
+            self.assertEqual(list(folder.iterdir()), [])
+
+    def test_partial_day_directory_is_preserved_and_never_initialized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.activate(executor=lambda *a, **k: self.fail('no workers'))
+            folder = f.m.mkdir(f.auto / '2026-11-10')
+            snapshot = f.m.mkdir(folder / 'snapshot'); f.m.immutable(snapshot / 'partial.json', b'PRIVATE')
+            before = {p.relative_to(folder): p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+            self.assertEqual(s.run('continue'), '')
+            with self.assertRaises(ValueError): s.run('daily')
+            after = {p.relative_to(folder): p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+            self.assertEqual(after, before)
+
+    def test_idle_guard_rejects_untrusted_missing_ledger_paths(self):
+        for kind in ('day_link', 'broken_ledger_link', 'public_day'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp); s = f.supervisor(); folder = f.auto / '2026-11-10'
+                if kind == 'day_link': folder.symlink_to(f.root / 'missing')
+                else:
+                    folder.mkdir(mode=0o700)
+                    if kind == 'broken_ledger_link': (folder / 'ledger.json').symlink_to(f.root / 'missing')
+                    else: folder.chmod(0o755)
+                with self.assertRaises(ValueError): s.run('continue')
+                self.assertFalse((f.auto / '.supervisor.lock').exists())
+
+    def test_diagnostic_write_failure_stops_before_worker_or_day_creation(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.activate()
+            calls = []
+            with patch.object(f.m, 'immutable', side_effect=OSError('SECRET disk failure')), \
+                    patch.object(s, 'daily', side_effect=lambda mode: calls.append(mode) or ''):
+                with self.assertRaises(OSError): s.run('daily')
+            self.assertEqual(calls, [])
+            self.assertFalse((f.auto / '2026-11-10').exists())
+
+    def test_untrusted_failure_marker_never_allows_a_fresh_day(self):
+        for kind in ('directory_link', 'broken_marker_link', 'public_directory'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp); s = f.activate(executor=lambda *a, **k: self.fail('no workers'))
+                folder = f.auto / 'failed-starts'
+                if kind == 'directory_link': folder.symlink_to(f.root / 'missing')
+                else:
+                    folder.mkdir(mode=0o700)
+                    if kind == 'broken_marker_link': (folder / '2026-11-10.json').symlink_to(f.root / 'missing')
+                    else: folder.chmod(0o755)
+                with self.assertRaises((ValueError, FileExistsError)): s.run('daily')
+                self.assertFalse((f.auto / '2026-11-10').exists())
+
+    def test_constructor_pin_failure_preserves_attempt_entry_epoch(self):
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp)
+            zone = dt.timezone(dt.timedelta(hours=9))
+            start = dt.datetime(2026, 11, 10, 14, 30, tzinfo=zone).timestamp()
+            class Clock(dt.datetime):
+                @classmethod
+                def now(cls, tz=None): return cls(2026, 11, 10, 14, 31, tzinfo=zone)
+            with patch.dict(os.environ, HERMES_HOME=str(f.profile)), \
+                    patch.object(f.m.dt, 'datetime', Clock), patch.object(f.m.time, 'time', return_value=start), \
+                    patch.object(f.m.Supervisor, 'check_pins', side_effect=f.m.Blocked('SECRET')), redirect_stdout(io.StringIO()):
+                self.assertEqual(f.m.main(['--config', str(f.configpath), '--mode', 'daily']), 1)
+            marker = f.m.read_json(f.auto / 'failed-starts' / '2026-11-10.json')
+            self.assertEqual(marker['started_epoch'], start)
+
+    def test_preledger_failure_latches_manual_only_across_policy_changes(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.activate(executor=lambda *a, **k: self.fail('no acquisition or model'))
+            s.now = lambda: dt.datetime(2026, 11, 10, 14, 30, tzinfo=dt.timezone(dt.timedelta(hours=9)))
+            with patch.object(s, 'activated', side_effect=f.m.Blocked('SECRET')):
+                with self.assertRaises(ValueError): s.run('daily')
+            marker = f.auto / 'failed-starts' / '2026-11-10.json'
+            record = f.m.read_json(marker); raw = marker.read_bytes()
+            self.assertEqual(record['started_epoch'], s.day().timestamp())
+            self.assertEqual(record['policy_sha256'], s.policy_sha256)
+            for hour, minute in ((14, 31), (15, 0), (23, 0)):
+                s.now = lambda: dt.datetime(2026, 11, 10, hour, minute, tzinfo=dt.timezone(dt.timedelta(hours=9)))
+                self.assertEqual(s.run('daily'), '연구 차단 2026-11-10')
+                self.assertFalse((f.auto / '2026-11-10').exists())
+            f.config['daily_max_turns'] = 79; f.save()
+            changed = f.supervisor(executor=lambda *a, **k: self.fail('no policy reset'))
+            self.assertEqual(changed.run('daily'), '연구 차단 2026-11-10')
+            self.assertEqual(marker.read_bytes(), raw)
+            # Repointing a valid private_root is also a policy change, not a
+            # fresh daily budget. The failure guard stays at the profile anchor.
+            alternate = f.private / 'alternate-automation'; alternate.mkdir(mode=0o700)
+            registry = alternate / 'registry'; registry.mkdir(mode=0o700)
+            f.config.update(private_root=str(alternate), registry=str(registry)); f.save()
+            moved = f.supervisor(executor=lambda *a, **k: self.fail('no root reset'))
+            self.assertEqual(moved.run('daily'), '연구 차단 2026-11-10')
+            self.assertFalse((alternate / '2026-11-10').exists())
+            self.assertEqual(marker.read_bytes(), raw)
+
+    def test_missing_day_deadline_alerts_at_17_without_fabricating_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor(executor=lambda *a, **k: self.fail('no worker'))
+            for hour, minute, expected in ((14, 0, ''), (16, 59, ''),
+                                            (17, 0, '연구 차단 2026-11-10'),
+                                            (23, 0, '연구 차단 2026-11-10')):
+                s.now = lambda: dt.datetime(2026, 11, 10, hour, minute, tzinfo=dt.timezone(dt.timedelta(hours=9)))
+                self.assertEqual(s.run('deadline'), expected)
+                self.assertFalse((f.auto / '2026-11-10').exists())
+            events = [f.m.read_json(p) for p in (f.auto / 'diagnostics').glob('*.json')]
+            self.assertEqual(sum(e['reason'] == 'missing_day_deadline' and e['outcome'] == 'blocked' for e in events), 2)
+            self.assertFalse((f.auto / '.supervisor.lock').exists())
+
+    def test_daily_short_wait_acquires_only_after_real_owner_releases(self):
+        import fcntl
+        import select
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor()
+            ready_r, ready_w = os.pipe(); release_r, release_w = os.pipe()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    fd = os.open(f.auto / '.supervisor.lock', os.O_CREAT | os.O_RDWR, 0o600)
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    os.write(ready_w, b'1'); os.read(release_r, 1); os.close(fd)
+                    os._exit(0)
+                except BaseException: os._exit(1)
+            try:
+                self.assertTrue(select.select([ready_r], [], [], 5)[0]); os.read(ready_r, 1)
+                original = fcntl.flock; collisions = []
+                def acquire(fd, flags):
+                    try: return original(fd, flags)
+                    except BlockingIOError:
+                        if not collisions: os.write(release_w, b'1')
+                        collisions.append(1); raise
+                with patch.object(f.m.fcntl, 'flock', side_effect=acquire), \
+                        patch.object(s, 'activated', return_value=None), patch.object(s, 'daily', return_value=''):
+                    self.assertEqual(s.run('daily'), '')
+                self.assertTrue(collisions)
+                self.assertEqual(os.waitpid(pid, 0)[1], 0); pid = None
+            finally:
+                if pid is not None:
+                    os.kill(pid, signal.SIGKILL); os.waitpid(pid, 0)
+                for fd in (ready_r, ready_w, release_r, release_w): os.close(fd)
+
+    def test_real_kernel_busy_continue_is_quiet_and_daily_wait_is_bounded(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp); s = f.supervisor()
+            folder = f.m.mkdir(f.auto / '2026-11-10')
+            f.m.immutable(folder / 'ledger.json', b'{}\n')
+            original = (folder / 'ledger.json').read_bytes()
+            fd = os.open(f.auto / '.supervisor.lock', os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.assertEqual(s.run('continue'), '')
+                events = [f.m.read_json(p) for p in (f.auto / 'diagnostics').glob('*.json')]
+                event, = [e for e in events if e['reason'] == 'lock_busy']
+                self.assertEqual((event['reason'], event['outcome']), ('lock_busy', 'quiet'))
+                start = time.monotonic()
+                with self.assertRaises(ValueError): s.run('daily')
+                self.assertLessEqual(time.monotonic() - start, 2.1)
+                self.assertEqual((folder / 'ledger.json').read_bytes(), original)
+                other = os.open(f.auto / '.supervisor.lock', os.O_RDWR)
+                try:
+                    with self.assertRaises(BlockingIOError): fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                finally: os.close(other)
+            finally: os.close(fd)
+
+    def test_untrusted_argv_and_profile_redirect_cannot_escape_safe_diagnostics(self):
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        import io
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp)
+            other = f.root / 'profiles' / 'other'; other.mkdir(mode=0o700)
+            foreign = other / 'private'; foreign.mkdir(mode=0o700)
+            redirected = foreign / 'automation'; redirected.mkdir(mode=0o700)
+            f.config.update(profile_home=str(other), private_root=str(redirected)); f.save()
+            for argv in (['--config', str(f.configpath), '--mode', 'daily'],
+                         ['--config', str(f.configpath), '--mode', 'SECRET/invalid']):
+                out = io.StringIO()
+                with patch.dict(os.environ, HERMES_HOME=str(f.profile)), redirect_stdout(out):
+                    self.assertEqual(f.m.main(argv), 1)
+                self.assertEqual(out.getvalue(), '자동화 차단\n')
+            self.assertEqual(list(redirected.iterdir()), [])
+            self.assertFalse((f.auto / 'failed-starts').exists())
+            events = [f.m.read_json(p) for p in (f.auto / 'diagnostics').glob('*.json')]
+            self.assertEqual({e['mode'] for e in events}, {'daily', 'unknown'})
+            for p in (f.auto / 'diagnostics').glob('*.json'):
+                self.assertNotIn('SECRET', p.read_text()); self.assertNotIn(str(f.root), p.read_text())
+            before = set(f.root.rglob('*'))
+            out = io.StringIO()
+            with patch.dict(os.environ, HERMES_HOME=str(other)), redirect_stdout(out):
+                self.assertEqual(f.m.main(['--config', str(f.configpath), '--mode', 'daily']), 1)
+            self.assertEqual(set(f.root.rglob('*')), before)
+
+    def test_safe_durable_cli_diagnostics_distinguish_constructor_and_receipt_failures(self):
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        import io
+        for reason in ('config_validation', 'pin_validation', 'canary_validation'):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp)
+                if reason == 'config_validation':
+                    f.config['profile_home'] = str(f.root / 'SECRET-other-profile')
+                    f.config['private_root'] = str(f.root / 'SECRET-redirect')
+                elif reason == 'pin_validation': f.config['binary_sha256'] = 'a' * 64
+                else: f.config['activation'] = True
+                f.save(); out = io.StringIO()
+                with patch.dict(os.environ, HERMES_HOME=str(f.profile)), redirect_stdout(out):
+                    self.assertEqual(f.m.main(['--config', str(f.configpath), '--mode', 'daily']), 1)
+                self.assertEqual(out.getvalue(), '자동화 차단\n')
+                files = [p for p in (f.auto / 'diagnostics').glob('*.json') if f.m.read_json(p)['outcome'] == 'blocked']
+                self.assertEqual(len(files), 1)
+                event = f.m.read_json(files[0])
+                self.assertEqual(event['reason'], reason)
+                self.assertEqual(event['mode'], 'daily')
+                self.assertEqual(event['outcome'], 'blocked')
+                self.assertEqual(set(event), {'schema_version', 'mode', 'date', 'stage', 'outcome', 'reason', 'timestamp'})
+                self.assertNotIn('SECRET', files[0].read_text())
+                self.assertNotIn(str(f.root), files[0].read_text())
+                self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
+                self.assertEqual(files[0].parent.stat().st_mode & 0o777, 0o700)
+                self.assertFalse((f.root / 'SECRET-redirect').exists())
+
+    def test_repin_canary_generation_preserves_original_receipt_and_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Fixture(tmp)
+            f.activate()
+            originals = {p: p.read_bytes() for p in (f.auto / 'canary').rglob('*') if p.is_file()}
+            old_receipt = (f.auto / 'canary-receipt.json').read_bytes()
+            f.config['activation'] = False
+            f.config['canary_generation'] = 'repin-synthetic-1'
+            f.config['canary']['nonce'] = 'freshsynthetic123'
+            f.save()
+            def probe(argv, **kw):
+                kw['stdout'].write(b'CANARY_OK freshsynthetic123\n')
+                return 0, False
+            s = f.supervisor(executor=probe, verifier=lambda r, sid: dict(state='completed', set_id=sid, attempt_count=3))
+            self.assertEqual(s.run('canary'), '카나리 통과 freshsynthetic123')
+            s.validate_canary_receipt()
+            self.assertTrue((f.auto / 'canaries' / 'repin-synthetic-1' / 'receipt.json').exists())
+            self.assertEqual((f.auto / 'canary-receipt.json').read_bytes(), old_receipt)
+            for p, raw in originals.items(): self.assertEqual(p.read_bytes(), raw)
+            self.assertEqual(s.run('canary'), '')
+
     def test_publication_pending_resumes_agent_without_reacquisition_and_respects_cap(self):
         for capped in (False, True):
             with self.subTest(capped=capped), tempfile.TemporaryDirectory() as tmp:
@@ -666,7 +986,8 @@ Path(''' + repr(str(marker)) + ''').write_text(str(t.pid))
             original = s.policy_sha256
             f.config['activation'] = True; f.save()
             self.assertEqual(f.supervisor().policy_sha256, original)
-            with self.assertRaises(ValueError): f.supervisor().run('daily')
+            with self.assertRaises(ValueError): f.supervisor().activated()
+            self.assertEqual(f.supervisor().run('daily'), '연구 차단 2026-11-10')
             f.binary.write_text('drift')
             with self.assertRaises(ValueError): f.supervisor()
 
