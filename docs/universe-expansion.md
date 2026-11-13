@@ -18,7 +18,7 @@ The intended interface is documented below; verify actual CLI help and tests bef
 
 ```sh
 python3 tools/collect_universe.py \
-  --universe-file universes/thematic-v1.json \
+  --universe-file "$(pwd)/universes/thematic-v1.json" \
   --env-file "$HERMES_HOME/.env" \
   --token-file "$HERMES_HOME/private/toss-token.json" \
   --output '<NEW private output outside Git>' \
