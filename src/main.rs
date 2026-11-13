@@ -22,15 +22,17 @@ Private offline mode (no network or fallback):
   sh-quant fail strategies/<id>.toml \"<why>\" --output-dir ABS
   sh-quant lesson <id> \"<one line>\" --output-dir ABS
 
-Frozen schema v2: complete adjusted Toss data, Asia/Seoul timezone, all
-24 fixed-universe symbols; manifest and CSV SHA256 verified before/after run.
+Frozen schema v2 requires all 24 legacy symbols. Frozen schema v3 uses an
+explicit hash-pinned universe; both require complete adjusted Toss data,
+Asia/Seoul timezone, and manifest/CSV SHA256 verification before/after run.
 Input/output must be absolute, outside every git checkout, without symlinks.
 Private dirs/files are enforced as 700/600. Metrics/curves stay in private
 index.json/<id>.json; stdout contains status only. Private IDs cannot be reused.
 lesson requires an existing private index entry. Writes are locked, fsynced,
 and atomically renamed (index is the commit point). Crash orphans are not reused.
-A crashed writer may leave .writer.lock: inspect it and remove manually only
-after confirming no writer is alive. Private errors suppress provider content.";
+The stable .writer.lock sidecar may remain after exit. Never unlink it:
+inspect actual kernel-lock ownership, not file existence or cached PIDs.
+Private errors suppress provider content.";
 
 #[derive(Deserialize)]
 struct Strategy {
@@ -253,6 +255,14 @@ fn dispatch(a: &[&str]) -> Result<()> {
 #[cfg(test)]
 mod cli_tests {
     use super::*;
+
+    #[test]
+    fn help_documents_versioned_inputs_and_never_unlinks_stable_locks() {
+        assert!(USAGE.contains("schema v3"));
+        assert!(USAGE.contains("schema v2"));
+        assert!(USAGE.contains("Never unlink"));
+        assert!(!USAGE.contains("remove manually"));
+    }
     use frozen::tests::{Fixture, uncontended};
     #[test]
     fn private_diagnostics_never_echo_provider_content() {
