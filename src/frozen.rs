@@ -36,9 +36,102 @@ struct Manifest {
     entries: Vec<Entry>,
 }
 #[derive(Deserialize)]
+struct UniverseManifest {
+    universe: UniverseRef,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UniverseRef {
+    path: String,
+    sha256: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Universe {
+    schema_version: u32,
+    universe_id: String,
+    classification_as_of: String,
+    point_in_time: bool,
+    selection_policy: String,
+    limitations: Vec<String>,
+    instruments: Vec<Instrument>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Instrument {
+    market: String,
+    ticker: String,
+    source_symbol: String,
+    themes: Vec<String>,
+}
+fn slug(s: &str) -> bool {
+    (1..=64).contains(&s.len())
+        && s.as_bytes()[0].is_ascii_alphanumeric()
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+fn identifier(market: &str, s: &str) -> bool {
+    let alnum = |b: u8| b.is_ascii_uppercase() || b.is_ascii_digit();
+    match market {
+        "US" => {
+            (1..=24).contains(&s.len())
+                && alnum(s.as_bytes()[0])
+                && s.bytes().all(|b| alnum(b) || b == b'.' || b == b'-')
+        }
+        "KR" => s.len() == 6 && s.bytes().all(alnum),
+        _ => false,
+    }
+}
+impl Universe {
+    fn validate(&self) -> Result<()> {
+        ensure!(
+            self.schema_version == 1
+                && !self.point_in_time
+                && slug(&self.universe_id)
+                && !self.selection_policy.trim().is_empty()
+                && !self.limitations.is_empty()
+                && self.limitations.iter().all(|s| !s.trim().is_empty()),
+            "invalid universe metadata"
+        );
+        strict_date(&self.classification_as_of)?;
+        ensure!(
+            (1..=512).contains(&self.instruments.len()),
+            "invalid universe size"
+        );
+        let mut identities = std::collections::BTreeSet::new();
+        let mut sources = std::collections::BTreeSet::new();
+        let mut markets = std::collections::BTreeSet::new();
+        for i in &self.instruments {
+            ensure!(
+                identifier(&i.market, &i.ticker) && identifier(&i.market, &i.source_symbol),
+                "invalid universe identifier"
+            );
+            ensure!(
+                identities.insert((&i.market, &i.ticker))
+                    && sources.insert((&i.market, &i.source_symbol)),
+                "duplicate universe identity/source"
+            );
+            let tags: std::collections::BTreeSet<_> = i.themes.iter().collect();
+            ensure!(
+                !i.themes.is_empty()
+                    && tags.len() == i.themes.len()
+                    && i.themes.iter().all(|s| slug(s)),
+                "invalid universe themes"
+            );
+            markets.insert(i.market.as_str());
+        }
+        ensure!(
+            markets.contains("US") && markets.contains("KR"),
+            "universe requires both markets"
+        );
+        Ok(())
+    }
+}
+#[derive(Deserialize)]
 struct Entry {
     market: String,
     ticker: String,
+    source_symbol: Option<Value>,
     currency: String,
     session: String,
     path: String,
@@ -100,7 +193,7 @@ impl Frozen {
         let manifest: Manifest = serde_json::from_slice(&bytes)?;
         let mut snapshot = vec![(path.to_path_buf(), bytes)];
         ensure!(
-            manifest.schema_version == 2
+            matches!(manifest.schema_version, 2 | 3)
                 && manifest.provider == "toss"
                 && manifest.adjusted
                 && manifest.timezone == "Asia/Seoul"
@@ -109,18 +202,57 @@ impl Frozen {
         );
         chrono::DateTime::parse_from_rfc3339(&manifest.prepared_at).context("invalid prepared_at")?;
         let cutoff = strict_date(&manifest.cutoff_exclusive)?;
-        let expected: std::collections::BTreeSet<_> = ["US", "KR"]
-            .into_iter()
-            .flat_map(|m| {
-                crate::data::universe(m)
-                    .iter()
-                    .map(move |t| (m.to_string(), t.to_string()))
-            })
-            .collect();
+        let catalog = if manifest.schema_version == 3 {
+            // Parse the extension only for schema3; schema2 keeps ignoring it.
+            let extension: UniverseManifest = serde_json::from_slice(&snapshot[0].1)?;
+            let reference = extension.universe;
+            ensure!(reference.path == "universe.json", "invalid universe path");
+            let universe_path = parent.join(reference.path);
+            secure(&universe_path, false)?;
+            let bytes = fs::read(&universe_path)?;
+            ensure!(
+                reference.sha256.len() == 64
+                    && reference.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                    && digest(&bytes).eq_ignore_ascii_case(&reference.sha256),
+                "universe hash mismatch"
+            );
+            let universe: Universe = serde_json::from_slice(&bytes)?;
+            universe.validate()?;
+            snapshot.push((universe_path, bytes));
+            Some(universe.instruments)
+        } else {
+            None
+        };
+        let expected: std::collections::BTreeSet<_> = if let Some(instruments) = &catalog {
+            instruments
+                .iter()
+                .map(|i| (i.market.clone(), i.ticker.clone()))
+                .collect()
+        } else {
+            ["US", "KR"]
+                .into_iter()
+                .flat_map(|m| {
+                    crate::data::universe(m)
+                        .iter()
+                        .map(move |t| (m.to_string(), t.to_string()))
+                })
+                .collect()
+        };
         let mut seen = std::collections::BTreeSet::new();
         let mut paths = std::collections::BTreeSet::new();
         let mut markets: BTreeMap<String, Vec<(String, Bars)>> = BTreeMap::new();
         for e in manifest.entries {
+            if let Some(instruments) = &catalog {
+                let descriptor = instruments
+                    .iter()
+                    .find(|i| i.market == e.market && i.ticker == e.ticker)
+                    .context("entry outside universe")?;
+                ensure!(
+                    e.source_symbol.as_ref().and_then(Value::as_str)
+                        == Some(descriptor.source_symbol.as_str()),
+                    "inconsistent source_symbol"
+                );
+            }
             ensure!(
                 expected.contains(&(e.market.clone(), e.ticker.clone()))
                     && seen.insert((e.market.clone(), e.ticker.clone())),
@@ -415,6 +547,285 @@ pub(crate) mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+    // All schema3 prices and classifications below are synthetic, not market coverage.
+    fn synthetic_schema3(f: &Fixture) -> (Value, Value) {
+        let mut manifest = f.populate();
+        let old = manifest["entries"].as_array().unwrap();
+        let mut entries = vec![old[0].clone(), old[12].clone()];
+        let universe = json!({
+            "schema_version":1,"universe_id":"synthetic-alternate",
+            "classification_as_of":"2026-11-13","point_in_time":false,
+            "selection_policy":"Synthetic test only","limitations":["Not market data"],
+            "instruments":[
+                {"market":"US","ticker":"TEST.A","source_symbol":"TEST-A","themes":["synthetic"]},
+                {"market":"KR","ticker":"12345A","source_symbol":"12345B","themes":["synthetic"]}
+            ]
+        });
+        for (entry, instrument) in entries
+            .iter_mut()
+            .zip(universe["instruments"].as_array().unwrap())
+        {
+            entry["ticker"] = instrument["ticker"].clone();
+            entry["source_symbol"] = instrument["source_symbol"].clone();
+        }
+        manifest["schema_version"] = json!(3);
+        manifest["entries"] = json!(entries);
+        write_synthetic_universe(f, &mut manifest, &serde_json::to_vec(&universe).unwrap());
+        (manifest, universe)
+    }
+    fn write_synthetic_universe(f: &Fixture, manifest: &mut Value, bytes: &[u8]) {
+        fs::write(f.0.join("universe.json"), bytes).unwrap();
+        manifest["universe"] = json!({"path":"universe.json","sha256":digest(bytes)});
+        f.write(manifest);
+    }
+    #[test]
+    fn schema3_loads_synthetic_alternate_two_market_universe() {
+        let f = Fixture::new();
+        let (mut manifest, _) = synthetic_schema3(&f);
+        let input = Frozen::load(&f.manifest()).expect("schema3 alternate universe");
+        assert_eq!(input.market("US")[0].0, "TEST.A");
+        assert_eq!(input.market("KR")[0].0, "12345A");
+        assert_eq!(input.market("US")[0].1.close, vec![11., 12., 13., 14.]);
+        input.verify().unwrap();
+        manifest["schema_version"] = json!(2);
+        f.write(&manifest);
+        assert!(
+            Frozen::load(&f.manifest()).is_err(),
+            "schema2 must retain exact24"
+        );
+    }
+    #[test]
+    fn schema3_universe_digest_and_verify_use_exact_raw_bytes() {
+        let f = Fixture::new();
+        let (mut manifest, _) = synthetic_schema3(&f);
+        let path = f.0.join("universe.json");
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.push(b'\n'); // Still identical JSON, different frozen bytes.
+        fs::write(&path, &bytes).unwrap();
+        assert!(Frozen::load(&f.manifest()).is_err(), "digest mismatch");
+        write_synthetic_universe(&f, &mut manifest, &bytes);
+        let input = Frozen::load(&f.manifest()).unwrap();
+        bytes.push(b' ');
+        fs::write(path, bytes).unwrap();
+        assert!(input.verify().is_err(), "catalog tampering after load");
+    }
+    #[test]
+    fn schema3_rejects_invalid_synthetic_catalog_contract() {
+        let f = Fixture::new();
+        let (mut manifest, catalog) = synthetic_schema3(&f);
+        let mut invalid = vec![];
+        for (field, value) in [
+            ("schema_version", json!(2)),
+            ("point_in_time", json!(true)),
+            ("universe_id", json!("Upper")),
+            ("universe_id", json!("-bad")),
+            ("universe_id", json!("x".repeat(65))),
+            ("classification_as_of", json!("2026-2-30")),
+            ("classification_as_of", json!("2026-02-30")),
+            ("selection_policy", json!("  ")),
+            ("limitations", json!([])),
+            ("limitations", json!([""])),
+            ("unknown", json!(true)),
+        ] {
+            let mut c = catalog.clone();
+            c[field] = value;
+            invalid.push(c);
+        }
+        for field in [
+            "schema_version",
+            "universe_id",
+            "classification_as_of",
+            "point_in_time",
+            "selection_policy",
+            "limitations",
+            "instruments",
+        ] {
+            let mut c = catalog.clone();
+            c.as_object_mut().unwrap().remove(field);
+            invalid.push(c);
+        }
+        for (index, field, value) in [
+            (0, "ticker", json!("lower")),
+            (0, "ticker", json!(".BAD")),
+            (0, "ticker", json!("X".repeat(25))),
+            (0, "source_symbol", json!("a/b")),
+            (1, "ticker", json!("12345")),
+            (1, "ticker", json!("12345a")),
+            (1, "source_symbol", json!("1234567")),
+            (0, "market", json!("XX")),
+            (0, "themes", json!([])),
+            (0, "themes", json!(["same", "same"])),
+            (0, "themes", json!(["Bad tag"])),
+            (0, "unknown", json!(0)),
+        ] {
+            let mut c = catalog.clone();
+            c["instruments"][index][field] = value;
+            invalid.push(c);
+        }
+        for field in ["market", "ticker", "source_symbol", "themes"] {
+            let mut c = catalog.clone();
+            c["instruments"][0].as_object_mut().unwrap().remove(field);
+            invalid.push(c);
+        }
+        let mut duplicate = catalog.clone();
+        duplicate["instruments"]
+            .as_array_mut()
+            .unwrap()
+            .push(catalog["instruments"][0].clone());
+        invalid.push(duplicate);
+        let mut alias = catalog.clone();
+        let mut other = catalog["instruments"][0].clone();
+        other["ticker"] = json!("OTHER");
+        alias["instruments"].as_array_mut().unwrap().push(other);
+        invalid.push(alias);
+        let mut single_market = catalog.clone();
+        single_market["instruments"].as_array_mut().unwrap().pop();
+        invalid.push(single_market);
+        let mut empty = catalog.clone();
+        empty["instruments"] = json!([]);
+        invalid.push(empty);
+        let mut oversized = catalog.clone();
+        oversized["instruments"] = json!((0..513).map(|i| json!({"market":"US","ticker":format!("T{i}"),"source_symbol":format!("T{i}"),"themes":["synthetic"]})).collect::<Vec<_>>());
+        invalid.push(oversized);
+        let mut accepted = vec![];
+        for (n, c) in invalid.iter().enumerate() {
+            write_synthetic_universe(&f, &mut manifest, &serde_json::to_vec(c).unwrap());
+            if Frozen::load(&f.manifest()).is_ok() {
+                accepted.push(n);
+            }
+        }
+        // Duplicate keys must be rejected at both catalog and instrument level.
+        for (n, bytes) in [
+            serde_json::to_string(&catalog)
+                .unwrap()
+                .replacen("{", "{\"point_in_time\":false,", 1),
+            serde_json::to_string(&catalog).unwrap().replace(
+                "\"ticker\":\"TEST.A\"",
+                "\"ticker\":\"TEST.A\",\"ticker\":\"TEST.A\"",
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            write_synthetic_universe(&f, &mut manifest, bytes.as_bytes());
+            if Frozen::load(&f.manifest()).is_ok() {
+                accepted.push(1000 + n);
+            }
+        }
+        assert!(
+            accepted.is_empty(),
+            "accepted invalid catalog cases {accepted:?}"
+        );
+    }
+    #[test]
+    fn schema3_requires_exact_manifest_descriptor_sources() {
+        let mut accepted = vec![];
+        for (n, (field, value)) in [
+            ("source_symbol", json!("TEST.A")),
+            ("source_symbol", Value::Null),
+            ("currency", json!("KRW")),
+            ("session", json!("KR_INTEGRATED")),
+            ("ticker", json!("EXTRA")),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let f = Fixture::new();
+            let (mut m, _) = synthetic_schema3(&f);
+            m["entries"][0][field] = value;
+            f.write(&m);
+            if Frozen::load(&f.manifest()).is_ok() {
+                accepted.push(n);
+            }
+        }
+        for mode in 0..3 {
+            let f = Fixture::new();
+            let (mut m, _) = synthetic_schema3(&f);
+            let entries = m["entries"].as_array_mut().unwrap();
+            match mode {
+                0 => {
+                    entries.pop();
+                }
+                1 => entries.push(entries[0].clone()),
+                _ => {
+                    entries[0].as_object_mut().unwrap().remove("source_symbol");
+                }
+            }
+            f.write(&m);
+            if Frozen::load(&f.manifest()).is_ok() {
+                accepted.push(100 + mode);
+            }
+        }
+        assert!(
+            accepted.is_empty(),
+            "accepted mismatched entries {accepted:?}"
+        );
+    }
+    #[test]
+    fn schema3_rejects_unsafe_or_noncanonical_universe_reference() {
+        for path in [
+            "../universe.json",
+            "/universe.json",
+            "",
+            "./universe.json",
+            "alias.json",
+        ] {
+            let f = Fixture::new();
+            let (mut m, _) = synthetic_schema3(&f);
+            fs::copy(f.0.join("universe.json"), f.0.join("alias.json")).unwrap();
+            m["universe"]["path"] = json!(path);
+            f.write(&m);
+            assert!(Frozen::load(&f.manifest()).is_err(), "accepted path {path}");
+        }
+        use std::os::unix::fs::symlink;
+        for hardlink in [false, true] {
+            let f = Fixture::new();
+            synthetic_schema3(&f);
+            let original = f.0.join("universe.json");
+            let target = f.0.join("catalog");
+            fs::rename(&original, &target).unwrap();
+            if hardlink {
+                fs::hard_link(&target, &original).unwrap();
+            } else {
+                symlink(&target, &original).unwrap();
+            }
+            fs::set_permissions(&target, fs::Permissions::from_mode(0o644)).unwrap();
+            assert!(Frozen::load(&f.manifest()).is_err());
+            assert_eq!(
+                fs::metadata(target).unwrap().permissions().mode() & 0o777,
+                0o644
+            );
+        }
+    }
+    #[test]
+    fn schema3_requires_strict_reference_but_schema2_ignores_new_metadata() {
+        let f = Fixture::new();
+        let mut legacy = f.populate();
+        legacy["universe"] = json!("ignored legacy extension");
+        legacy["entries"][0]["source_symbol"] = json!({"ignored":true});
+        f.write(&legacy);
+        Frozen::load(&f.manifest()).expect("schema2 extension tolerance unchanged");
+        let (manifest, _) = synthetic_schema3(&f);
+        for reference in [
+            Value::Null,
+            json!({"path":"universe.json"}),
+            json!({"path":"universe.json","sha256":manifest["universe"]["sha256"],"extra":0}),
+        ] {
+            let mut m = manifest.clone();
+            m["universe"] = reference;
+            f.write(&m);
+            assert!(Frozen::load(&f.manifest()).is_err(), "invalid reference");
+        }
+        let raw = serde_json::to_string(&manifest).unwrap().replace(
+            "\"path\":\"universe.json\"",
+            "\"path\":\"universe.json\",\"path\":\"universe.json\"",
+        );
+        fs::write(f.manifest(), raw).unwrap();
+        assert!(
+            Frozen::load(&f.manifest()).is_err(),
+            "duplicate reference key"
+        );
     }
     #[test]
     fn frozen_rejects_reused_csv_paths() {

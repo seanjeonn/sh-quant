@@ -28,6 +28,11 @@ import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
 
+try:  # CLI execution and repository/importlib consumers use the same helper.
+    from universe_contract import validate_universe
+except ModuleNotFoundError:
+    from tools.universe_contract import validate_universe
+
 
 HOST = 'https://openapi.tossinvest.com'
 KST = ZoneInfo('Asia/Seoul')
@@ -378,7 +383,7 @@ def provider_symbol(market, ticker):
     return {('US', 'BRK-B'): 'BRK.B'}.get((market, ticker), ticker)
 
 
-def history(auth, market, ticker, start, cutoff, now):
+def history(auth, market, ticker, start, cutoff, now, *, source_symbol=None):
     before = cutoff.isoformat() + 'T00:00:00+09:00'
     cursors, dates = set(), {}
     previous_oldest = None
@@ -389,7 +394,7 @@ def history(auth, market, ticker, start, cutoff, now):
         if before in cursors:
             raise Blocked('cursor_cycle')
         cursors.add(before)
-        response = auth.candles({'symbol': provider_symbol(market, ticker), 'interval': '1d', 'count': 200,
+        response = auth.candles({'symbol': provider_symbol(market, ticker) if source_symbol is None else source_symbol, 'interval': '1d', 'count': 200,
                                  'before': before, 'adjusted': 'true'})
         try:
             result = response['result']
@@ -502,6 +507,7 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
     parser.add_argument('--env-file', required=True)
     parser.add_argument('--token-file', required=True)
     parser.add_argument('--output', required=True, help='NEW private directory outside any git checkout')
+    parser.add_argument('--universe-file', help='Public UniverseJSONv1 catalog; single-market acquisition batches allowed, native final snapshots require both markets')
     parser.add_argument('--start-date', default='2015-01-01')
     parser.add_argument('--cutoff-exclusive', required=True)
     parser.add_argument('--max-attempts', type=int, default=600)
@@ -512,6 +518,7 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
     client = None
     entries = []
     current = None
+    universe_raw = None
     now = now or dt.datetime.now(KST)
     try:
         if (not 1 <= args.max_attempts <= 600 or not math.isfinite(args.max_minutes)
@@ -521,6 +528,15 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
         start, cutoff = iso_date(args.start_date), iso_date(args.cutoff_exclusive)
         if start >= cutoff or cutoff > now.astimezone(KST).date():
             raise Blocked('invalid_date_range')
+        instruments = [{'market': market, 'ticker': ticker,
+                        'source_symbol': provider_symbol(market, ticker)}
+                       for market, tickers in UNIVERSE.items() for ticker in tickers]
+        if args.universe_file is not None:
+            try:
+                universe_raw = Path(args.universe_file).read_bytes()
+                instruments = validate_universe(universe_raw)['instruments']
+            except (OSError, ValueError, RecursionError):
+                raise Blocked('invalid_universe') from None
         candidate = private_path(args.output, exists=False)
         if candidate.exists():
             raise Blocked('output_already_exists')
@@ -531,33 +547,37 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
         credentials = read_env(args.env_file)
         candidate.mkdir(mode=0o700)
         output = candidate
+        if universe_raw is not None:
+            immutable(output / 'universe.json', universe_raw)
         client = Client(output, args.max_attempts, args.max_minutes * 60, args.min_interval,
                         send, monotonic, sleep)
         lock = token.with_name(token.name + '.collection.lock')
         with file_lock(lock, client):
             auth = Auth(client, token, credentials)
-            for market, tickers in UNIVERSE.items():
-                for ticker in tickers:
-                    client.check()
-                    current = {'market': market, 'ticker': ticker}
-                    rows, quality = history(auth, market, ticker, start, cutoff, now)
-                    validate_rows(rows, cutoff)
-                    buffer = io.StringIO(newline='')
-                    writer = csv.writer(buffer, lineterminator='\n')
-                    writer.writerow(('date', 'open', 'high', 'low', 'close', 'volume'))
-                    writer.writerows(rows)
-                    raw = buffer.getvalue().encode()
-                    name = f'{market}_{ticker}.toss.csv'
-                    immutable(output / name, raw)
-                    entries.append(dict(current, source_symbol=provider_symbol(market, ticker), currency='USD' if market == 'US' else 'KRW',
-                                        session='US_REGULAR' if market == 'US' else 'KR_INTEGRATED',
-                                        path=name, sha256=hashlib.sha256(raw).hexdigest(), rows=len(rows),
-                                        first=rows[0][0], last=rows[-1][0], quality=quality,
-                                        observed_history_start=rows[0][0],
-                                        starts_after_requested_start=rows[0][0] > start.isoformat()))
-            expected = {(market, ticker) for market, tickers in UNIVERSE.items() for ticker in tickers}
+            for instrument in instruments:
+                market, ticker = instrument['market'], instrument['ticker']
+                source_symbol = instrument['source_symbol']
+                client.check()
+                current = {'market': market, 'ticker': ticker}
+                rows, quality = history(auth, market, ticker, start, cutoff, now,
+                                        source_symbol=source_symbol)
+                validate_rows(rows, cutoff)
+                buffer = io.StringIO(newline='')
+                writer = csv.writer(buffer, lineterminator='\n')
+                writer.writerow(('date', 'open', 'high', 'low', 'close', 'volume'))
+                writer.writerows(rows)
+                raw = buffer.getvalue().encode()
+                name = f'{market}_{ticker}.toss.csv'
+                immutable(output / name, raw)
+                entries.append(dict(current, source_symbol=source_symbol, currency='USD' if market == 'US' else 'KRW',
+                                    session='US_REGULAR' if market == 'US' else 'KR_INTEGRATED',
+                                    path=name, sha256=hashlib.sha256(raw).hexdigest(), rows=len(rows),
+                                    first=rows[0][0], last=rows[-1][0], quality=quality,
+                                    observed_history_start=rows[0][0],
+                                    starts_after_requested_start=rows[0][0] > start.isoformat()))
+            expected = {(item['market'], item['ticker']) for item in instruments}
             actual = {(e['market'], e['ticker']) for e in entries}
-            if actual != expected or len(entries) != 24:
+            if actual != expected or len(entries) != len(instruments):
                 raise Blocked('incomplete_universe')
             if client.clock() >= client.deadline:
                 raise Blocked('wall_budget_exhausted')
@@ -572,8 +592,11 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
                                     'min_rows_each_side': 2, 'max_end_gap_calendar_days': 7},
                         'provenance': {'raw_directory': 'raw', 'request_log': 'requests.jsonl',
                                        'scope': 'oauth token issuance and daily candles only'}}
+            if universe_raw is not None:
+                manifest.update(schema_version=3, universe={
+                    'path': 'universe.json', 'sha256': hashlib.sha256(universe_raw).hexdigest()})
             immutable(output / 'manifest.json', json_bytes(manifest))
-        print('complete: 24 entries; private manifest.json written')
+        print(f'complete: {len(entries)} entries; private manifest.json written')
         return 0
     except (Exception, KeyboardInterrupt) as error:
         # No raw exception text, repr, traceback, provider body, or credential values.
@@ -582,6 +605,9 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
             failure = {'schema_version': 2, 'provider': 'toss', 'status': 'blocked', 'prepared_at': stamp(),
                        'errors': [dict(current or {}, code=code)], 'completed_entries': entries,
                        'http_attempts': client.attempts if client else 0}
+            if universe_raw is not None:
+                failure.update(schema_version=3, universe={
+                    'path': 'universe.json', 'sha256': hashlib.sha256(universe_raw).hexdigest()})
             try:
                 immutable(output / 'blocked.json', json_bytes(failure))
             except OSError:
