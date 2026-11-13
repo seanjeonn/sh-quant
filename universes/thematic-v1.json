@@ -1,0 +1,797 @@
+{
+  "schema_version": 1,
+  "universe_id": "thematic_v1",
+  "classification_as_of": "2026-11-13",
+  "point_in_time": false,
+  "selection_policy": "Prespecified current-selected coverage cohort: retain legacy24; add broad-sector ETFs and long-lived thematic/industry representatives without inspecting strategy scores. Equal symbol weighting remains the existing engine policy, not theme-balanced allocation.",
+  "limitations": [
+    "Current-selected survivors and current thematic hypotheses, not historical point-in-time membership; do not use tags as historical trading signals.",
+    "Tags are manual research hypotheses, not provider-certified historical sector classifications; ETF constituent membership changes are not reconstructed.",
+    "No assertion of verified listing/delisting dates or complete exchange calendars. Later observed data starts are reported, never backfilled.",
+    "Unavailable or quality-ineligible instruments block complete collection; do not silently remove failures or replace instruments after observing scores.",
+    "US contains ETFs and individual equities while KR is primarily individual equities; country/theme composition is not matched and overlap does not create extra portfolio positions.",
+    "Provider-defined adjusted-price data do not certify dividend-reinvested total returns; raw data and numerical research results remain private."
+  ],
+  "instruments": [
+    {
+      "market": "US",
+      "ticker": "SPY",
+      "source_symbol": "SPY",
+      "themes": [
+        "broad_market"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "QQQ",
+      "source_symbol": "QQQ",
+      "themes": [
+        "growth_technology"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "AAPL",
+      "source_symbol": "AAPL",
+      "themes": [
+        "consumer_technology"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "MSFT",
+      "source_symbol": "MSFT",
+      "themes": [
+        "software_cloud",
+        "ai_infrastructure"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "NVDA",
+      "source_symbol": "NVDA",
+      "themes": [
+        "semiconductors",
+        "ai_infrastructure"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "AMZN",
+      "source_symbol": "AMZN",
+      "themes": [
+        "internet_consumer",
+        "software_cloud"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "GOOGL",
+      "source_symbol": "GOOGL",
+      "themes": [
+        "internet_consumer",
+        "ai_infrastructure"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "META",
+      "source_symbol": "META",
+      "themes": [
+        "internet_consumer"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "JPM",
+      "source_symbol": "JPM",
+      "themes": [
+        "financials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XOM",
+      "source_symbol": "XOM",
+      "themes": [
+        "oil_gas"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "JNJ",
+      "source_symbol": "JNJ",
+      "themes": [
+        "healthcare"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "BRK-B",
+      "source_symbol": "BRK.B",
+      "themes": [
+        "financials",
+        "diversified"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLB",
+      "source_symbol": "XLB",
+      "themes": [
+        "materials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLC",
+      "source_symbol": "XLC",
+      "themes": [
+        "communication_media"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLE",
+      "source_symbol": "XLE",
+      "themes": [
+        "oil_gas"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLF",
+      "source_symbol": "XLF",
+      "themes": [
+        "financials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLI",
+      "source_symbol": "XLI",
+      "themes": [
+        "industrials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLK",
+      "source_symbol": "XLK",
+      "themes": [
+        "software_cloud"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLP",
+      "source_symbol": "XLP",
+      "themes": [
+        "consumer_staples"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLRE",
+      "source_symbol": "XLRE",
+      "themes": [
+        "real_estate"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLU",
+      "source_symbol": "XLU",
+      "themes": [
+        "utilities_power"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLV",
+      "source_symbol": "XLV",
+      "themes": [
+        "healthcare"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XLY",
+      "source_symbol": "XLY",
+      "themes": [
+        "consumer_discretionary"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "SMH",
+      "source_symbol": "SMH",
+      "themes": [
+        "semiconductors"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "SOXX",
+      "source_symbol": "SOXX",
+      "themes": [
+        "semiconductors"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "IGV",
+      "source_symbol": "IGV",
+      "themes": [
+        "software_cloud"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "HACK",
+      "source_symbol": "HACK",
+      "themes": [
+        "cybersecurity"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "SKYY",
+      "source_symbol": "SKYY",
+      "themes": [
+        "software_cloud"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "TAN",
+      "source_symbol": "TAN",
+      "themes": [
+        "clean_energy"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "ICLN",
+      "source_symbol": "ICLN",
+      "themes": [
+        "clean_energy"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "LIT",
+      "source_symbol": "LIT",
+      "themes": [
+        "ev_battery"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "URA",
+      "source_symbol": "URA",
+      "themes": [
+        "nuclear_power"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XBI",
+      "source_symbol": "XBI",
+      "themes": [
+        "biotech"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "IBB",
+      "source_symbol": "IBB",
+      "themes": [
+        "biotech"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "ITA",
+      "source_symbol": "ITA",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XAR",
+      "source_symbol": "XAR",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "PPA",
+      "source_symbol": "PPA",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "ROBO",
+      "source_symbol": "ROBO",
+      "themes": [
+        "robotics"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "BOTZ",
+      "source_symbol": "BOTZ",
+      "themes": [
+        "robotics"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "KRE",
+      "source_symbol": "KRE",
+      "themes": [
+        "regional_banks"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "IYR",
+      "source_symbol": "IYR",
+      "themes": [
+        "real_estate"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "XME",
+      "source_symbol": "XME",
+      "themes": [
+        "materials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "GDX",
+      "source_symbol": "GDX",
+      "themes": [
+        "precious_metals"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "SLV",
+      "source_symbol": "SLV",
+      "themes": [
+        "precious_metals"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "GLD",
+      "source_symbol": "GLD",
+      "themes": [
+        "precious_metals"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "CAT",
+      "source_symbol": "CAT",
+      "themes": [
+        "industrials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "DE",
+      "source_symbol": "DE",
+      "themes": [
+        "industrials"
+      ]
+    },
+    {
+      "market": "US",
+      "ticker": "UNP",
+      "source_symbol": "UNP",
+      "themes": [
+        "transport_logistics"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "069500",
+      "source_symbol": "069500",
+      "themes": [
+        "broad_market"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "005930",
+      "source_symbol": "005930",
+      "themes": [
+        "semiconductors",
+        "consumer_technology"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000660",
+      "source_symbol": "000660",
+      "themes": [
+        "semiconductors",
+        "ai_infrastructure"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "207940",
+      "source_symbol": "207940",
+      "themes": [
+        "biotech"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "005380",
+      "source_symbol": "005380",
+      "themes": [
+        "ev_battery",
+        "consumer_discretionary"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000270",
+      "source_symbol": "000270",
+      "themes": [
+        "ev_battery",
+        "consumer_discretionary"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "035420",
+      "source_symbol": "035420",
+      "themes": [
+        "internet_consumer",
+        "software_cloud"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "051910",
+      "source_symbol": "051910",
+      "themes": [
+        "ev_battery",
+        "materials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "006400",
+      "source_symbol": "006400",
+      "themes": [
+        "ev_battery"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "105560",
+      "source_symbol": "105560",
+      "themes": [
+        "financials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "055550",
+      "source_symbol": "055550",
+      "themes": [
+        "financials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "035720",
+      "source_symbol": "035720",
+      "themes": [
+        "internet_consumer"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "042700",
+      "source_symbol": "042700",
+      "themes": [
+        "semiconductors"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000990",
+      "source_symbol": "000990",
+      "themes": [
+        "semiconductors"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "017670",
+      "source_symbol": "017670",
+      "themes": [
+        "communication_media"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000810",
+      "source_symbol": "000810",
+      "themes": [
+        "financials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "036570",
+      "source_symbol": "036570",
+      "themes": [
+        "gaming_media"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "263750",
+      "source_symbol": "263750",
+      "themes": [
+        "gaming_media"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "035900",
+      "source_symbol": "035900",
+      "themes": [
+        "entertainment"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "041510",
+      "source_symbol": "041510",
+      "themes": [
+        "entertainment"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "096770",
+      "source_symbol": "096770",
+      "themes": [
+        "oil_gas",
+        "ev_battery"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "086520",
+      "source_symbol": "086520",
+      "themes": [
+        "ev_battery"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "247540",
+      "source_symbol": "247540",
+      "themes": [
+        "ev_battery"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "010120",
+      "source_symbol": "010120",
+      "themes": [
+        "utilities_power"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "267260",
+      "source_symbol": "267260",
+      "themes": [
+        "utilities_power"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "298040",
+      "source_symbol": "298040",
+      "themes": [
+        "utilities_power"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "034020",
+      "source_symbol": "034020",
+      "themes": [
+        "nuclear_power"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "015760",
+      "source_symbol": "015760",
+      "themes": [
+        "utilities_power"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "009830",
+      "source_symbol": "009830",
+      "themes": [
+        "clean_energy"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "112610",
+      "source_symbol": "112610",
+      "themes": [
+        "clean_energy"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "010950",
+      "source_symbol": "010950",
+      "themes": [
+        "oil_gas"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "051900",
+      "source_symbol": "051900",
+      "themes": [
+        "consumer_staples"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "005490",
+      "source_symbol": "005490",
+      "themes": [
+        "materials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "010130",
+      "source_symbol": "010130",
+      "themes": [
+        "materials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "068270",
+      "source_symbol": "068270",
+      "themes": [
+        "biotech"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "128940",
+      "source_symbol": "128940",
+      "themes": [
+        "biotech"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000100",
+      "source_symbol": "000100",
+      "themes": [
+        "healthcare"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "000720",
+      "source_symbol": "000720",
+      "themes": [
+        "industrials"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "108490",
+      "source_symbol": "108490",
+      "themes": [
+        "robotics"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "012450",
+      "source_symbol": "012450",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "047810",
+      "source_symbol": "047810",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "079550",
+      "source_symbol": "079550",
+      "themes": [
+        "defense_aerospace"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "009540",
+      "source_symbol": "009540",
+      "themes": [
+        "shipbuilding"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "010140",
+      "source_symbol": "010140",
+      "themes": [
+        "shipbuilding"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "042660",
+      "source_symbol": "042660",
+      "themes": [
+        "shipbuilding"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "011200",
+      "source_symbol": "011200",
+      "themes": [
+        "transport_logistics"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "090430",
+      "source_symbol": "090430",
+      "themes": [
+        "consumer_discretionary"
+      ]
+    },
+    {
+      "market": "KR",
+      "ticker": "097950",
+      "source_symbol": "097950",
+      "themes": [
+        "consumer_staples"
+      ]
+    }
+  ]
+}
