@@ -253,7 +253,7 @@ fn dispatch(a: &[&str]) -> Result<()> {
 #[cfg(test)]
 mod cli_tests {
     use super::*;
-    use frozen::tests::Fixture;
+    use frozen::tests::{Fixture, uncontended};
     #[test]
     fn private_diagnostics_never_echo_provider_content() {
         let e = anyhow::anyhow!("synthetic sensitive provider payload");
@@ -323,12 +323,20 @@ mod cli_tests {
         assert_eq!(index[0]["status"], "ok");
         assert!(index[0]["markets"]["US"]["is"].is_object());
         assert!(out.join("synthetic-run.json").exists());
-        assert!(dispatch(&["run", p, "--data-manifest", m, "--output-dir", o]).is_err());
-        assert!(dispatch(&["fail", p, "synthetic failure", "--output-dir", o]).is_err());
-        dispatch(&["lesson", "synthetic-run", "synthetic lesson", "--output-dir", o]).unwrap();
+        // Each dispatch drops its Store. A parallel fork may still hold the
+        // CLOEXEC descriptor until exec; retry only that structured lock error.
+        let duplicate = uncontended(|| dispatch(&["run", p, "--data-manifest", m, "--output-dir", o]));
+        assert_eq!(duplicate.unwrap_err().to_string(), "result id already exists");
+        let duplicate = uncontended(|| dispatch(&["fail", p, "synthetic failure", "--output-dir", o]));
+        assert_eq!(duplicate.unwrap_err().to_string(), "result id already exists");
+        uncontended(|| dispatch(&["lesson", "synthetic-run", "synthetic lesson", "--output-dir", o]))
+            .unwrap();
         let second = f.0.join("synthetic-fail.toml");
-        dispatch(&["fail", second.to_str().unwrap(), "synthetic failure", "--output-dir", o]).unwrap();
-        assert!(dispatch(&["lesson", "missing", "text", "--output-dir", o]).is_err());
+        uncontended(|| {
+            dispatch(&["fail", second.to_str().unwrap(), "synthetic failure", "--output-dir", o])
+        }).unwrap();
+        let missing = uncontended(|| dispatch(&["lesson", "missing", "text", "--output-dir", o]));
+        assert_eq!(missing.unwrap_err().to_string(), "no private result with id");
         assert_eq!(public_before, fs::read(results_dir().join("index.json")).ok());
         let nonexistent = f.0.join("absent");
         assert!(
