@@ -424,6 +424,139 @@ pub(crate) mod tests {
         f.write(&v);
         assert!(Frozen::load(&f.manifest()).is_err());
     }
+    // Test-only (#50): parallel process spawning can inherit another test's
+    // CLOEXEC lock descriptor until exec/exit. Only use after the intended
+    // owner has gone away, never for live-owner rejection assertions.
+    pub(crate) fn uncontended<T>(mut operation: impl FnMut() -> Result<T>) -> Result<T> {
+        use std::time::{Duration, Instant};
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match operation() {
+                Err(error)
+                    if matches!(
+                        error.downcast_ref::<fs::TryLockError>(),
+                        Some(fs::TryLockError::WouldBlock)
+                    ) && Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                result => return result,
+            }
+        }
+    }
+
+    #[test]
+    fn uncontended_propagates_non_lock_errors_without_retry() {
+        for error in [
+            anyhow::anyhow!("private output locked: operation would block"),
+            std::io::Error::from(std::io::ErrorKind::WouldBlock).into(),
+            fs::TryLockError::Error(std::io::Error::from(std::io::ErrorKind::PermissionDenied)).into(),
+        ] {
+            let expected = format!("{error:#}");
+            let mut error = Some(error);
+            let mut attempts = 0;
+            let result: Result<()> = uncontended(|| {
+                attempts += 1;
+                Err(error.take().expect("non-lock error must not retry"))
+            });
+            assert_eq!(attempts, 1);
+            assert_eq!(format!("{:#}", result.unwrap_err()), expected);
+        }
+    }
+
+    #[test]
+    fn uncontended_stops_at_deadline_without_unlocking_live_owner() {
+        use std::time::{Duration, Instant};
+        let f = Fixture::new();
+        let dir = f.0.join("output");
+        let _owner = Store::open(&dir).unwrap();
+        let start = Instant::now();
+        let error = uncontended(|| Store::open(&dir)).err().unwrap();
+        assert!(matches!(
+            error.downcast_ref::<fs::TryLockError>(),
+            Some(fs::TryLockError::WouldBlock)
+        ));
+        assert!(start.elapsed() >= Duration::from_secs(2));
+        assert!(start.elapsed() < Duration::from_secs(5));
+        assert!(Store::open(&dir).is_err());
+    }
+
+    #[test]
+    fn private_store_reopens_after_inherited_fork_descriptor_closes() {
+        use std::io::Write;
+        use std::os::fd::AsRawFd;
+        use std::os::unix::net::UnixStream;
+        unsafe extern "C" {
+            fn fork() -> i32;
+            fn read(fd: i32, buffer: *mut std::ffi::c_void, count: usize) -> isize;
+            fn _exit(status: i32) -> !;
+            fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
+        }
+        // Release and reap only this owned child, including on assertion panic.
+        struct ForkChild(i32, UnixStream);
+        impl Drop for ForkChild {
+            fn drop(&mut self) {
+                let _ = self.1.write_all(b"release");
+                let mut status = 0;
+                loop {
+                    let result = unsafe { waitpid(self.0, &mut status, 0) };
+                    if result == self.0 {
+                        assert_eq!(status, 0, "fork child failed");
+                        break;
+                    }
+                    if std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+                        panic!("could not reap owned fork child");
+                    }
+                }
+            }
+        }
+        let f = Fixture::new();
+        let dir = f.0.join("output");
+        let store = Store::open(&dir).unwrap();
+        let before = fs::metadata(dir.join(".writer.lock")).unwrap();
+        let (parent, child) = UnixStream::pair().unwrap();
+        let child_fd = child.as_raw_fd();
+        let pid = unsafe { fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            // No Rust runtime, allocation, unwinding or destructors after fork.
+            // Blocking here models the fork-to-exec window of a parallel spawn.
+            let mut byte = 0u8;
+            unsafe {
+                loop {
+                    let received = read(child_fd, (&mut byte as *mut u8).cast(), 1);
+                    if received >= 0 {
+                        _exit(if received == 1 { 0 } else { 1 });
+                    }
+                }
+            }
+        }
+        let child = ForkChild(pid, parent);
+        drop(store);
+        let error = Store::open(&dir)
+            .err()
+            .expect("child must retain inherited lock");
+        assert!(matches!(
+            error.downcast_ref::<fs::TryLockError>(),
+            Some(fs::TryLockError::WouldBlock)
+        ));
+        let mut child = Some(child);
+        let reopened = uncontended(|| {
+            let result = Store::open(&dir);
+            if result.is_err() {
+                // Release only after capturing the first real lock failure:
+                // the old immediate-open path deterministically remains RED.
+                drop(child.take());
+            }
+            result
+        })
+        .expect("uncontended reopen must tolerate inherited descriptor release");
+        assert!(Store::open(&dir).is_err()); // Still rejects an actual live owner.
+        let after = fs::metadata(dir.join(".writer.lock")).unwrap();
+        assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
+        drop(reopened);
+    }
+
     // Invoked only by the process-death regression test, never by the suite.
     #[test]
     #[ignore]
@@ -489,7 +622,7 @@ pub(crate) mod tests {
         drop(store);
         let after = fs::metadata(&lock_path).expect("lock sidecar must persist after normal drop");
         assert_eq!((after.dev(), after.ino()), (before.dev(), before.ino()));
-        let _store = Store::open(&dir).unwrap();
+        let _store = uncontended(|| Store::open(&dir)).unwrap();
     }
 
     #[test]
@@ -514,7 +647,7 @@ pub(crate) mod tests {
         );
         assert_eq!(fs::read(&orphan).unwrap(), b"unknown orphan detail");
         drop(store);
-        let mut store = Store::open(&dir).unwrap();
+        let mut store = uncontended(|| Store::open(&dir)).unwrap();
         assert!(store.insert(json!({"id":"new"}), None).is_err());
         assert_eq!(fs::read(&pending).unwrap(), b"unknown interrupted write");
     }
@@ -575,7 +708,7 @@ pub(crate) mod tests {
             assert_eq!(e.unwrap().metadata().unwrap().permissions().mode() & 0o777, 0o600);
         }
         drop(store);
-        let mut store = Store::open(&dir).unwrap();
+        let mut store = uncontended(|| Store::open(&dir)).unwrap();
         store.insert(json!({"id":"synthetic-b"}), None).unwrap();
         assert_eq!(store.index().unwrap().len(), 2);
         assert!(Store::open(&crate::root().join("results")).is_err());
