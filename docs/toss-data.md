@@ -21,6 +21,10 @@ These interfaces are implemented/validated under #26; a documentation example al
 
 The frozen loader verifies the manifest and all CSV files before and after execution. Invalid OHLC, missing/extra symbols, hash drift, path escape, currency/session mismatch or incomplete status fails closed. It does not repair prices, impute missing trading days, skip a failed symbol or refresh data. A raw-provider quality error is data_setup blocked, not a research rejection.
 
+## Optional versioned-universe acquisition (#57)
+
+The exact24/schema2 behavior above remains the default. An explicit `--universe-file <absolute-catalog-path>` selects validated Universe JSON v1 and produces schema3 with an immutable exact-byte catalog SHA256 reference. Native schema3 checks exact configured symbols/source aliases and requires both markets; internal collection shards may contain a single market. Costs, signals, metrics and split boundaries do not change. `tools/collect_universe.py` is a separate bounded initial-bootstrap/resume interface, not permission to raise the daily600request cap. See [universe-contract.md](universe-contract.md), [universe-expansion.md](universe-expansion.md), and the actual [96-instrument validation record](universe-validation-20261113.md). Current-selected thematic cohorts are not historical point-in-time constituents. The active operating pin is not migrated by these tools or by collecting a dataset.
+
 ## Read-only acquisition and tokens
 
 Use only `/oauth2/token` and `GET /api/v1/candles`; account and order APIs are out of scope. A client has one valid token. Reuse the shared private token under an interprocess lock; coordinate with any existing collector before issuance. Never run independent token refreshers for kingfish and this preparation tool.

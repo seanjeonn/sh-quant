@@ -1,0 +1,25 @@
+# Versioned universe contract — approved feature #57
+
+Engineering only. Preserve pinned production bc99433 and all earlier data/artifacts. No main merge, operating re-pin, or policy changes are authorized by this document. Scope: daily data, not theme-rotation alpha.
+
+## Universe JSON v1
+
+UTF-8 JSON with these required top-level fields: `schema_version: 1`, `universe_id` (lowercase slug, 1–64 `[a-z0-9_-]`, starts alphanumeric), `classification_as_of` (strict ISO date), `point_in_time: false`, `selection_policy` (nonempty string), `limitations` (nonempty array of nonempty strings), `instruments` (1–512 entries). Both KR and US must be represented in a final loadable snapshot. Reject unsupported versions, duplicate keys/identities, malformed identifiers and missing/unknown fields rather than guessing. Current-classification historical price cohorts are explicitly NOT point-in-time universes. True PIT claims require a future independently specified contract.
+
+Each instrument has exactly `market` (`US`/`KR`), `ticker`, `source_symbol`, `themes` (nonempty unique lowercase-slug strings). US identifiers are 1–24 ASCII uppercase letters/digits/dot/hyphen, starting alphanumeric; KR identifiers are six uppercase ASCII letters/digits. Keep identifiers literal. Source alias is explicit, never inferred. Distinct identities cannot map to the same (market,source_symbol). Source symbol syntax follows the market identifier rules. Metadata tags describe present-day research hypotheses, not certified historical classifications or historical trading eligibility. Do not use them as past signals.
+
+## Frozen schema3
+
+Existing schema2/default24 behavior remains unchanged. With explicit `--universe-file PATH`, collector validates the file, copies exact bytes into its new private snapshot as `universe.json`, and emits schema3 with `universe: {path: "universe.json", sha256: <exact bytes digest>}`. It uses explicit source_symbol, not a hardcoded alias inferred from ticker. Every configured instrument must produce validated data, or the snapshot is blocked. Preserve original collector OHLC/date/session/currency/completion/row-count/split quality checks; unavailable or too-short/newly listed instruments block rather than silently disappear. Failures and sample-eligibility limitations must remain recorded.
+
+Rust schema3 loader reads and validates the private universe file and its digest, requires exact manifest-entry equality with its configured instruments, and keeps universe bytes among Frozen.verify() inputs. Entry source_symbol must equal descriptor, and session/currency must match market. Preserve all path/ownership/file-type/hash/CSV checks. Schema2 must still require the original exact24 list. Both-market check prevents a native market() panic. No costs, signals, splits, metrics or weights change.
+
+## Bounded initial acquisition builder
+
+A separate `tools/collect_universe.py` initial-bootstrap CLI accepts `--universe-file`, `--env-file`, `--token-file`, NEW `--output`, `--start-date`, `--cutoff-exclusive`, `--max-attempts`, `--max-minutes`, `--batch-size`, and explicit `--resume` for the SAME existing output. The native default daily command and its600request limit are NOT raised. Each child prepare_toss invocation has <=600attempts, <=20minutes, min_interval>=0.25. Parent adds an immutable total budget and fixed catalog/start/cutoff/source-code identities before first network. Planned engineering acquisition: at most6000HTTP attempts/120minutes in aggregate, batch-size12. Failed attempts consume budget; neither changing CLI caps nor renaming state may reset a resumed acquisition. Keep stable kernel lock with inherited FD until a live child exits; no unlink lock/cached PID killing. Reserve each child budget before launch, preserve intent/start/failure evidence across parent death; conservative charging is acceptable. No automatic retry of an incomplete/failed child. Resume validates already successful batch manifest/universe/CSV hashes and never re-downloads them.
+
+Batch catalogs are deterministic literal subsets of the frozen full catalog; root complete manifest retains full catalog/order, exact file hashes and provenance links to child manifests, using safe relative paths under the same private output. Never mark partial/failed/budget-exhausted coverage complete. Raw data, logs and detailed metrics remain private outside Git. Zero HTTP paths need synthetic tests; actual network execution belongs to parent after offline tests/review.
+
+## Acceptance boundaries
+
+Synthetic coverage is not market-data coverage. Parent must run bounded actual expanded collection, verify every final file and native frozen input load, and report unavailable symbols/time coverage explicitly. A current-selected expanded cohort still has survival/membership bias; #13/#28 remain open. Existing24/common-window comparisons must use distinct new engineering output IDs, never rerun or overwrite research success IDs. No source/binary/config edits in active ops checkout.
