@@ -108,11 +108,14 @@ class Client:
             self.sleep(delay)
         self.check()
 
-    def request(self, path, params=None, token=None, form=None):
+    def _validate_request(self, path, params, form):
         if path not in ('/oauth2/token', '/api/v1/candles'):
             raise Blocked('endpoint_not_allowed')
         if path == '/api/v1/candles' and params and set(params) - {'symbol', 'interval', 'count', 'before', 'adjusted'}:
             raise Blocked('parameter_not_allowed')
+
+    def request(self, path, params=None, token=None, form=None):
+        self._validate_request(path, params, form)
         url = HOST + path
         if params:
             url += '?' + urllib.parse.urlencode(params)
@@ -148,7 +151,7 @@ class Client:
             lowered = {k.lower(): v for k, v in response_headers.items()}
             end = dict(base, event='end', timestamp=stamp(), status=status, network_error=network_error,
                        response_received=bool(status))
-            if path == '/api/v1/candles':
+            if path != '/oauth2/token':
                 name = f'raw/{number:06d}.bin'
                 immutable(self.output / name, raw)
                 end.update(raw_path=name, sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
