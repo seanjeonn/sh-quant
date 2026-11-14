@@ -155,7 +155,7 @@ class Supervisor:
         self.stage = 'config_validation'
         self.config_path = str(private(config))
         self.c = c = read_json(config)
-        require(isinstance(c, dict) and FIELDS <= c.keys() and not c.keys() - FIELDS - {'legacy_completed', 'canary_generation'})
+        require(isinstance(c, dict) and FIELDS <= c.keys() and not c.keys() - FIELDS - {'legacy_completed', 'canary_generation', 'expanded_data'})
         if 'canary_generation' in c:
             require(type(c['canary_generation']) is str and re.fullmatch('[A-Za-z0-9_-]{8,100}', c['canary_generation']))
         require(type(c['schema_version']) is int and c['schema_version'] == 1)
@@ -200,6 +200,25 @@ class Supervisor:
             require(type(digest) is str and re.fullmatch('[a-f0-9]{64}', digest))
         require({'tools/research_set.py', 'tools/research_contract.py', 'tools/prepare_toss.py', 'Cargo.toml', 'Cargo.lock'} <= c['code_pins'].keys())
         require(any(n.startswith('src/') for n in c['code_pins']))
+        if 'expanded_data' in c:
+            expanded = c['expanded_data']
+            require(type(expanded) is dict and set(expanded) == {'universe_file', 'universe_sha256',
+                'seed_manifest', 'seed_manifest_sha256', 'start_date', 'refresh_policy'})
+            require(all(type(v) is str for v in expanded.values()))
+            require(expanded['start_date'] == '2000-01-01' and
+                    expanded['refresh_policy'] == 'overlap200_prefix_carried_v1')
+            for key in ('universe_sha256', 'seed_manifest_sha256'):
+                require(re.fullmatch('[a-f0-9]{64}', expanded[key]))
+            catalog = path(expanded['universe_file'])
+            require(catalog.is_relative_to(Path(c['core_repo']) / 'universes'))
+            catalog_name = str(catalog.relative_to(c['core_repo']))
+            require({'tools/refresh_toss.py', 'tools/universe_contract.py', 'tools/collect_universe.py',
+                     catalog_name} <= c['code_pins'].keys())
+            require(c['code_pins'][catalog_name] == expanded['universe_sha256'] == sha(catalog.read_bytes()))
+            seed = private(expanded['seed_manifest'])
+            require(seed.name == 'manifest.json' and seed.is_relative_to(profile / 'private'))
+            require(self.root.is_relative_to(profile / 'private'))
+            require(sha(seed.read_bytes()) == expanded['seed_manifest_sha256'])
         legacy = c.get('legacy_completed', [])
         require(type(legacy) is list)
         dates = set()
@@ -219,6 +238,9 @@ class Supervisor:
         self._trusted_root = self.root
         self.stage = 'pin_validation'
         self.check_pins()
+        if 'expanded_data' in c:
+            self.expanded_manifest(Path(c['expanded_data']['seed_manifest']),
+                                   c['expanded_data']['seed_manifest_sha256'])
         self.stage = 'ready'
 
     def git(self, repo, *args):
@@ -249,6 +271,8 @@ class Supervisor:
                             if name != 'tools/automation_supervisor.py': actual.add(name)
             for name in ('Cargo.toml', 'Cargo.lock', 'build.rs', 'rust-toolchain', 'rust-toolchain.toml'):
                 if (Path(repo) / name).exists(): actual.add(name)
+            if 'expanded_data' in c:
+                actual.add(str(Path(c['expanded_data']['universe_file']).relative_to(c['core_repo'])))
             require(actual == set(c['code_pins']))
 
     def canary_paths(self):
@@ -412,6 +436,9 @@ class Supervisor:
             require(type(item['started_epoch']) in (int, float) and math.isfinite(item['started_epoch']))
             require(item['updated_epoch'] >= item['started_epoch'])
             if previous:
+                if 'expanded_data' in self.c:
+                    for key in ('snapshot_sha256', 'base_manifest', 'base_manifest_sha256'):
+                        if key in previous: require(item.get(key) == previous[key])
                 require(item['started_epoch'] == previous['started_epoch'] and item['launches'] >= previous['launches'] and
                         item['acquisition_attempts'] >= previous['acquisition_attempts'] and item['updated_epoch'] >= previous['updated_epoch'])
             previous = item
@@ -462,7 +489,64 @@ class Supervisor:
         deadline = now.replace(hour=17, minute=0, second=0, microsecond=0)
         return min(self.c['daily_wall_seconds'] - elapsed, deadline.timestamp() - now.timestamp())
 
+    def select_base(self, date):
+        """Newest same-policy completed data wins, including failed research days."""
+        require(dt.date.fromisoformat(date).isoformat() == date)
+        for folder in sorted(self.root.iterdir(), reverse=True):
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', folder.name) or folder.name >= date:
+                continue
+            require(dt.date.fromisoformat(folder.name).isoformat() == folder.name)
+            private(folder, directory=True)
+            ledgerpath = private(folder / 'ledger.json', missing=True)
+            if not ledgerpath.exists(): continue  # preserved interrupted preledger day
+            hint = read_json(ledgerpath)
+            if hint.get('policy_sha256') != self.policy_sha256: continue
+            ledger = self.read_ledger(folder)
+            manifest = folder / 'snapshot' / 'manifest.json'
+            if 'snapshot_sha256' not in ledger:
+                # Partial acquisitions are not reusable; an unbound COMPLETE one
+                # is ambiguous, not permission to revert to an older vintage.
+                if manifest.exists(): require(read_json(manifest).get('status') != 'complete')
+                continue
+            require(ledger['acquisition_attempts'] == 1)
+            return self.expanded_manifest(manifest, ledger['snapshot_sha256'], folder.name)
+        expanded = self.c['expanded_data']
+        manifest, digest = self.expanded_manifest(Path(expanded['seed_manifest']), expanded['seed_manifest_sha256'])
+        require(read_json(manifest)['cutoff_exclusive'] < date)
+        return manifest, digest
+
+    def expanded_manifest(self, manifestpath, digest=None, date=None):
+        """Validate exact catalog cohort and private schema3 data, without auth reads."""
+        expanded = self.c['expanded_data']
+        manifestpath = private(manifestpath)
+        require(manifestpath.name == 'manifest.json' and
+                manifestpath.is_relative_to(Path(self.c['profile_home']) / 'private'))
+        raw = manifestpath.read_bytes()
+        if digest is not None:
+            require(type(digest) is str and re.fullmatch('[a-f0-9]{64}', digest) and sha(raw) == digest)
+        catalograw = path(expanded['universe_file']).read_bytes()
+        require(sha(catalograw) == expanded['universe_sha256'])
+        catalog = self.core_module('universe_contract').validate_universe(catalograw)
+        require({i['market'] for i in catalog['instruments']} == {'US', 'KR'})
+        value = decode(raw)
+        cutoff = value.get('cutoff_exclusive')
+        require(type(cutoff) is str and dt.date.fromisoformat(cutoff).isoformat() == cutoff)
+        if date is not None: require(cutoff == date)
+        # The pinned collector validator supports both batched seed paths and
+        # ordinary refresh CSVs, checking identity, bytes, OHLCV and split coverage.
+        collector = self.core_module('collect_universe')
+        try:
+            collector.validate_batch(manifestpath.parent, catalograw,
+                dict(start_date=expanded['start_date'], cutoff_exclusive=cutoff),
+                value.get('http_attempts'))  # historical seed count, not a new request budget
+        except Exception:
+            raise Blocked('blocked') from None
+        require(private(manifestpath).read_bytes() == raw)
+        return manifestpath, sha(raw)
+
     def frozen_manifest(self, snapshot, date):
+        if 'expanded_data' in self.c:
+            return self.expanded_manifest(snapshot / 'manifest.json', date=date)
         private(snapshot, directory=True)
         manifestpath = snapshot / 'manifest.json'
         manifest = read_json(manifestpath)
@@ -637,6 +721,7 @@ Frozen private evidence (never publish paths or market values):
 
     def research(self, folder, ledger, snapshot, mode):
         manifest, digest = self.frozen_manifest(snapshot, ledger['date'])
+        if 'expanded_data' in self.c: require(ledger.get('snapshot_sha256') == digest)
         if 'manifest_sha256' in ledger: require(ledger['manifest_sha256'] == digest)
         else: ledger['manifest_sha256'] = digest
         worktree = self.worktree(ledger['date'])
@@ -727,16 +812,40 @@ Frozen private evidence (never publish paths or market values):
             snapshot = folder / 'snapshot'
             if not ledger['acquisition_attempts'] and not states:
                 require(not snapshot.exists())
+                if 'expanded_data' in self.c:
+                    base, basehash = self.select_base(date)
+                    ledger.update(base_manifest=str(base), base_manifest_sha256=basehash)
                 ledger.update(status='acquiring', acquisition_attempts=1)
                 self.save_ledger(folder, ledger)
-                argv = [sys.executable, str(Path(self.c['core_repo']) / 'tools' / 'prepare_toss.py'),
-                        '--env-file', self.c['env_file'], '--token-file', self.c['token_file'],
-                        '--output', str(snapshot), '--cutoff-exclusive', date,
-                        '--max-attempts', str(self.c['acquisition_max_attempts']),
-                        '--max-minutes', str(self.c['acquisition_max_minutes']),
-                        '--min-interval', str(self.c['min_interval'])]
+                if 'expanded_data' in self.c:
+                    expanded = self.c['expanded_data']
+                    argv = [sys.executable, str(Path(self.c['core_repo']) / 'tools' / 'refresh_toss.py'),
+                            '--universe-file', expanded['universe_file'], '--universe-sha256', expanded['universe_sha256'],
+                            '--base-manifest', ledger['base_manifest'], '--base-sha256', ledger['base_manifest_sha256'],
+                            '--env-file', self.c['env_file'], '--token-file', self.c['token_file'],
+                            '--output', str(snapshot), '--start-date', expanded['start_date'],
+                            '--cutoff-exclusive', date,
+                            '--max-attempts', str(self.c['acquisition_max_attempts']),
+                            '--max-minutes', str(self.c['acquisition_max_minutes']),
+                            '--min-interval', str(self.c['min_interval'])]
+                else:
+                    argv = [sys.executable, str(Path(self.c['core_repo']) / 'tools' / 'prepare_toss.py'),
+                            '--env-file', self.c['env_file'], '--token-file', self.c['token_file'],
+                            '--output', str(snapshot), '--cutoff-exclusive', date,
+                            '--max-attempts', str(self.c['acquisition_max_attempts']),
+                            '--max-minutes', str(self.c['acquisition_max_minutes']),
+                            '--min-interval', str(self.c['min_interval'])]
                 self.launch(folder, 'acquisition', argv, self.c['core_repo'],
                             min(self.c['acquisition_max_minutes'] * 60, self.remaining(ledger)))
+                if 'expanded_data' in self.c:
+                    manifest, digest = self.frozen_manifest(snapshot, date)
+                    value = read_json(manifest)
+                    refresh = value.get('provenance', {}).get('refresh', {})
+                    require(refresh.get('policy') == self.c['expanded_data']['refresh_policy'] and
+                            refresh.get('base_manifest_sha256') == ledger['base_manifest_sha256'])
+                    require(value['http_attempts'] <= self.c['acquisition_max_attempts'])
+                    ledger['snapshot_sha256'] = digest
+                    self.save_ledger(folder, ledger)
             # Validation and model continuation are performed only after acquisition
             # has a durable successful completion and frozen manifest.
             return self.research(folder, ledger, snapshot, mode)
