@@ -416,6 +416,29 @@ class RefreshTests(unittest.TestCase):
         self.assertFalse((self.output / 'manifest.json').exists())
         self.assertEqual(json.loads((self.output / 'blocked.json').read_bytes())['errors'][0]['code'], 'history_coverage_regressed')
 
+    def test_fallback_cannot_drop_known_interior_dates_from_base_or_tail(self):
+        for index, missing in enumerate(('2024-01-15', '2022-02-15')):
+            with self.subTest(missing=missing):
+                self.calls.clear()
+                out = self.root / f'interior-missing-{index}'
+                args = list(self.args)
+                args[args.index('--output') + 1] = str(out)
+                def partial(*request):
+                    status, headers, raw = self.send(*request)
+                    value = json.loads(raw)
+                    candles = value['result']['candles']
+                    if len(self.calls) == 1:
+                        candles[1]['volume'] = 1  # Force a whole-symbol fallback.
+                    else:
+                        value['result']['candles'] = [c for c in candles
+                            if not c['timestamp'].startswith(missing)]
+                    return status, headers, json.dumps(value).encode()
+                result, text = self.run_refresh(args=args, send=partial)
+                self.assertEqual((result, text), (1, 'blocked: history_coverage_regressed\n'))
+                self.assertFalse((out / 'manifest.json').exists())
+                self.assertEqual(json.loads((out / 'blocked.json').read_bytes())['errors'][0]['code'],
+                                 'history_coverage_regressed')
+
     def test_wall_budget_includes_post_http_validation_and_publication(self):
         original = self.m.p.immutable
         def late(path, raw):

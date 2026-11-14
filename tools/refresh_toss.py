@@ -362,7 +362,10 @@ def main(argv=None, *, send=transport, now=None, monotonic=time.monotonic, sleep
                                               source_symbol=instrument['source_symbol'])
                     mode = 'full-refresh'
                 p.validate_rows(rows, cutoff)
-                if rows[0][0] > old[0][0] or rows[-1][0] < max(old[-1][0], fresh[-1][0] if fresh else old[-1][0]):
+                known_dates = {r[0] for r in old} | {r[0] for r in fresh}
+                if (not known_dates.issubset({r[0] for r in rows})
+                        or rows[0][0] > old[0][0]
+                        or rows[-1][0] < max(old[-1][0], fresh[-1][0] if fresh else old[-1][0])):
                     raise p.Blocked('history_coverage_regressed')
                 buffer = io.StringIO(newline='')
                 writer = csv.writer(buffer, lineterminator='\n')
