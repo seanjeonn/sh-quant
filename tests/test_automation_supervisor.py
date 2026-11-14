@@ -124,6 +124,278 @@ def module():
     return mod
 
 
+class ExpandedFixture(Fixture):
+    """Private synthetic schema3 inputs; never runs a data worker."""
+    def __init__(self, root):
+        super().__init__(root)
+        catalogs = self.core / 'universes'; catalogs.mkdir()
+        self.catalog = catalogs / 'synthetic.json'
+        self.catalog.write_bytes(self.m.encode(dict(schema_version=1, universe_id='synthetic',
+            classification_as_of='2026-11-01', point_in_time=False,
+            selection_policy='Synthetic fixture only', limitations=['Not historical membership'],
+            instruments=[dict(market='US', ticker='TEST', source_symbol='TEST', themes=['synthetic']),
+                         dict(market='KR', ticker='000001', source_symbol='000001', themes=['synthetic'])])))
+        helper = self.core / 'tools' / 'refresh_toss.py'
+        if not helper.exists(): helper.write_text('# synthetic worker placeholder; not executable\n')
+        for p in (helper, self.catalog):
+            self.config['code_pins'][str(p.relative_to(self.core))] = self.m.sha(p.read_bytes())
+        git(self.core, 'add', '.')
+        git(self.core, '-c', 'user.name=Fixture', '-c', 'user.email=f@invalid', 'commit', '-qm', 'synthetic expanded inputs')
+        self.config['engine_commit'] = git(self.core, 'rev-parse', 'HEAD')
+        self.seed = self.private / 'seed'
+        self.expanded_frozen(self.seed, '2026-11-07')
+        self.config['expanded_data'] = dict(universe_file=str(self.catalog),
+            universe_sha256=self.m.sha(self.catalog.read_bytes()), seed_manifest=str(self.seed / 'manifest.json'),
+            seed_manifest_sha256=self.m.sha((self.seed / 'manifest.json').read_bytes()),
+            start_date='2000-01-01', refresh_policy='overlap200_prefix_carried_v1')
+        self.save()
+
+    def expanded_frozen(self, output, date):
+        output.mkdir(mode=0o700)
+        self.m.immutable(output / 'universe.json', self.catalog.read_bytes())
+        days = []; day = dt.date(2021, 1, 1); cutoff = dt.date.fromisoformat(date)
+        while day < cutoff:
+            if day.weekday() < 5: days.append(day.isoformat())
+            day += dt.timedelta(days=1)
+        raw = ('date,open,high,low,close,volume\n' + ''.join(d + ',1,1,1,1,1\n' for d in days)).encode()
+        entries = []
+        for instrument in json.loads(self.catalog.read_bytes())['instruments']:
+            us = instrument['market'] == 'US'; name = instrument['market'] + '.csv'
+            self.m.immutable(output / name, raw)
+            entries.append(dict(market=instrument['market'], ticker=instrument['ticker'],
+                source_symbol=instrument['source_symbol'], currency='USD' if us else 'KRW',
+                session='US_REGULAR' if us else 'KR_INTEGRATED', path=name, sha256=self.m.sha(raw),
+                rows=len(days), first=days[0], last=days[-1], quality={}, observed_history_start=days[0],
+                starts_after_requested_start=True))
+        self.m.immutable(output / 'manifest.json', self.m.encode(dict(schema_version=3, provider='toss',
+            status='complete', adjusted=True, timezone='Asia/Seoul', start_date='2000-01-01',
+            prepared_at=date + 'T12:00:00+09:00', cutoff_exclusive=date, http_attempts=2, entries=entries,
+            universe=dict(path='universe.json', sha256=self.m.sha(self.catalog.read_bytes())))))
+
+
+class ExpandedPolicyTests(unittest.TestCase):
+    def test_expanded_boundary_rejects_untrusted_catalog_seed_and_pins(self):
+        cases = ('extra_key', 'missing_key', 'start', 'policy', 'catalog_path', 'catalog_hash',
+                 'catalog_pin', 'seed_path', 'seed_hash', 'schema', 'cohort', 'source', 'rows',
+                 'coverage', 'csv', 'catalog_bytes', 'point_in_time', 'single_market',
+                 'refresh_pin', 'contract_pin', 'collector_pin')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                f = ExpandedFixture(tmp); cfg = f.config['expanded_data']
+                if case == 'extra_key': cfg['extra'] = True
+                elif case == 'missing_key': del cfg['refresh_policy']
+                elif case == 'start': cfg['start_date'] = '2020-01-01'
+                elif case == 'policy': cfg['refresh_policy'] = 'unsafe'
+                elif case in ('catalog_path', 'seed_path'):
+                    key = 'universe_file' if case == 'catalog_path' else 'seed_manifest'
+                    target = f.root / Path(cfg[key]).name; shutil.copyfile(cfg[key], target); target.chmod(0o600)
+                    cfg[key] = str(target)
+                elif case in ('catalog_hash', 'seed_hash'):
+                    cfg['universe_sha256' if case == 'catalog_hash' else 'seed_manifest_sha256'] = '0' * 64
+                elif case == 'catalog_pin': f.config['code_pins']['universes/synthetic.json'] = '0' * 64
+                elif case.endswith('_pin'):
+                    name = dict(refresh_pin='refresh_toss', contract_pin='universe_contract', collector_pin='collect_universe')[case]
+                    del f.config['code_pins']['tools/' + name + '.py']
+                elif case in ('point_in_time', 'single_market'):
+                    value = json.loads(f.catalog.read_bytes())
+                    if case == 'point_in_time': value['point_in_time'] = True
+                    else: value['instruments'].pop()
+                    f.catalog.write_bytes(f.m.encode(value))
+                    cfg['universe_sha256'] = f.m.sha(f.catalog.read_bytes())
+                    f.config['code_pins']['universes/synthetic.json'] = cfg['universe_sha256']
+                elif case == 'catalog_bytes': (f.seed / 'universe.json').write_bytes(b'{}')
+                elif case == 'csv': (f.seed / 'US.csv').write_bytes(b'invalid')
+                else:
+                    p = f.seed / 'manifest.json'; value = json.loads(p.read_bytes())
+                    if case == 'schema': value['schema_version'] = 2
+                    elif case == 'cohort': value['entries'].pop()
+                    elif case == 'source': value['entries'][0]['source_symbol'] = 'WRONG'
+                    elif case == 'rows': value['entries'][0]['rows'] = 1
+                    elif case == 'coverage': value['entries'][0]['last'] = '2021-01-01'
+                    p.write_bytes(f.m.encode(value)); cfg['seed_manifest_sha256'] = f.m.sha(p.read_bytes())
+                f.save()
+                with self.assertRaises((ValueError, OSError)):
+                    f.supervisor()
+
+    def prior(self, f, s, date, **changes):
+        folder = f.m.mkdir(f.auto / date)
+        f.expanded_frozen(folder / 'snapshot', date)
+        ledger = dict(schema_version=1, date=date, started_epoch=s.day().timestamp(),
+            policy_sha256=s.policy_sha256, status='blocked', launches=1, acquisition_attempts=1,
+            snapshot_sha256=f.m.sha((folder / 'snapshot' / 'manifest.json').read_bytes()))
+        ledger.update(changes); s.save_ledger(folder, ledger)
+        return folder
+
+    def test_base_selection_seed_or_newest_same_policy_data_not_research_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp); s = f.supervisor()
+            seed = (f.seed / 'manifest.json', f.config['expanded_data']['seed_manifest_sha256'])
+            self.assertEqual(s.select_base('2026-11-10'), seed)
+            self.prior(f, s, '2026-11-08')
+            latest = self.prior(f, s, '2026-11-09')
+            self.prior(f, s, '2026-11-10')  # current day is never a base
+            self.prior(f, s, '2026-11-11')  # neither is a future day
+            self.assertEqual(s.select_base('2026-11-10'),
+                (latest / 'snapshot' / 'manifest.json', f.m.read_json(latest / 'ledger.json')['snapshot_sha256']))
+
+    def test_base_selection_ignores_old_policy_without_relabeling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp); s = f.supervisor()
+            old = self.prior(f, s, '2026-11-09', policy_sha256='0' * 64)
+            (old / 'snapshot' / 'manifest.json').write_bytes(b'legacy unrelated bytes')
+            before = {p: p.read_bytes() for p in old.rglob('*') if p.is_file()}
+            self.assertEqual(s.select_base('2026-11-10')[0], f.seed / 'manifest.json')
+            self.assertEqual(before, {p: p.read_bytes() for p in old.rglob('*') if p.is_file()})
+
+    def test_latest_matching_base_corruption_never_silently_falls_back(self):
+        for case in ('hash', 'missing_hash', 'csv', 'catalog', 'cutoff', 'cohort', 'ledger'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                f = ExpandedFixture(tmp); s = f.supervisor()
+                self.prior(f, s, '2026-11-08'); latest = self.prior(f, s, '2026-11-09')
+                p = latest / 'snapshot' / 'manifest.json'
+                if case == 'hash': p.write_bytes(p.read_bytes() + b' ')
+                elif case == 'csv': (p.parent / 'US.csv').write_bytes(b'bad')
+                elif case in ('catalog', 'cutoff', 'cohort'):
+                    value = json.loads(p.read_bytes())
+                    if case == 'catalog': value['universe']['sha256'] = '0' * 64
+                    elif case == 'cutoff': value['cutoff_exclusive'] = '2026-11-10'
+                    else: value['entries'].pop()
+                    p.write_bytes(f.m.encode(value))
+                    ledger = s.read_ledger(latest); ledger['snapshot_sha256'] = f.m.sha(p.read_bytes()); s.save_ledger(latest, ledger)
+                elif case == 'missing_hash':
+                    # A complete acquisition without its immutable binding is not trusted.
+                    for ledgerpath in latest.glob('ledger*.json'):
+                        value = json.loads(ledgerpath.read_bytes()); del value['snapshot_sha256']
+                        ledgerpath.write_bytes(f.m.encode(value))
+                elif case == 'ledger':
+                    value = json.loads((latest / 'ledger.json').read_bytes()); value['launches'] = 0
+                    (latest / 'ledger.json').write_bytes(f.m.encode(value))
+                with self.assertRaises(ValueError): s.select_base('2026-11-10')
+
+    def test_seed_must_precede_target_cutoff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp); s = f.supervisor()
+            with self.assertRaises(ValueError): s.select_base('2026-11-07')
+
+    def test_expanded_daily_one_collector_and_frozen_model_input_with_seed_or_prior(self):
+        for use_prior in (False, True):
+            with self.subTest(use_prior=use_prior), tempfile.TemporaryDirectory() as tmp:
+                f = ExpandedFixture(tmp); acquisitions = []; models = []
+                folder = f.auto / '2026-11-10'; seedraw = {p: p.read_bytes() for p in f.seed.iterdir()}
+                def execute(argv, **kw):
+                    self.assertEqual(len(kw['pass_fds']), 1)
+                    os.fstat(kw['pass_fds'][0])
+                    if '--output' in argv:
+                        acquisitions.append(argv)
+                        self.assertEqual(Path(argv[1]).name, 'refresh_toss.py')
+                        options = dict(zip(argv[2::2], argv[3::2]))
+                        self.assertEqual(options, {'--universe-file': str(f.catalog),
+                            '--universe-sha256': f.config['expanded_data']['universe_sha256'],
+                            '--base-manifest': str(base), '--base-sha256': basehash,
+                            '--env-file': f.config['env_file'], '--token-file': f.config['token_file'],
+                            '--output': str(folder / 'snapshot'), '--start-date': '2000-01-01',
+                            '--cutoff-exclusive': '2026-11-10', '--max-attempts': '600',
+                            '--max-minutes': '20', '--min-interval': '0.25'})
+                        self.assertLessEqual(kw['timeout'], 1200)
+                        f.expanded_frozen(Path(options['--output']), '2026-11-10')
+                        p = folder / 'snapshot' / 'manifest.json'; value = json.loads(p.read_bytes())
+                        value['provenance'] = dict(refresh=dict(policy='overlap200_prefix_carried_v1', base_manifest_sha256=basehash))
+                        p.write_bytes(f.m.encode(value))
+                    else:
+                        ledger = f.m.read_json(folder / 'ledger.json')
+                        digest = f.m.sha((folder / 'snapshot' / 'manifest.json').read_bytes())
+                        self.assertEqual(ledger['snapshot_sha256'], digest)
+                        self.assertEqual(ledger['base_manifest_sha256'], basehash)
+                        prompt = Path(argv[argv.index('--query-file') + 1]).read_text()
+                        evidence = json.loads(prompt.split('Frozen private evidence (never publish paths or market values):\n')[1])
+                        self.assertEqual(evidence['manifest_sha256'], digest)
+                        self.assertEqual(evidence['manifest'], str(folder / 'snapshot' / 'manifest.json'))
+                        self.assertIn('NEVER acquire data', prompt)
+                        models.append(argv)
+                    return 0, False
+                s = f.activate(executor=execute)
+                if use_prior:
+                    prior = self.prior(f, s, '2026-11-09'); base = prior / 'snapshot' / 'manifest.json'
+                else: base = f.seed / 'manifest.json'
+                basehash = f.m.sha(base.read_bytes())
+                s.day_sets = lambda date: [dict(state='await_plan_checkpoint', set_id=date + '_synthetic')] if models else []
+                self.assertEqual(s.run('daily'), '연구 대기 2026-11-10')
+                self.assertEqual(s.run('continue'), '연구 대기 2026-11-10')
+                ledger = s.read_ledger(folder)
+                self.assertEqual((ledger['acquisition_attempts'], ledger['launches']), (1, 2))
+                self.assertEqual(len(acquisitions), 1); self.assertEqual(len(models), 2)
+                self.assertEqual(seedraw, {p: p.read_bytes() for p in f.seed.iterdir()})
+
+    def test_acquisition_output_requires_bound_lineage_before_any_model(self):
+        for case in ('missing', 'policy', 'base', 'partial', 'too_many_attempts'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                f = ExpandedFixture(tmp); calls = []
+                def execute(argv, **kw):
+                    calls.append(argv); self.assertIn('--output', argv, 'model must not launch')
+                    out = Path(argv[argv.index('--output') + 1]); f.expanded_frozen(out, '2026-11-10')
+                    p = out / 'manifest.json'; value = json.loads(p.read_bytes())
+                    if case != 'missing':
+                        value['provenance'] = dict(refresh=dict(policy='overlap200_prefix_carried_v1',
+                            base_manifest_sha256=argv[argv.index('--base-sha256') + 1]))
+                    if case == 'policy': value['provenance']['refresh']['policy'] = 'wrong'
+                    if case == 'base': value['provenance']['refresh']['base_manifest_sha256'] = '0' * 64
+                    if case == 'partial': value['status'] = 'partial'
+                    if case == 'too_many_attempts': value['http_attempts'] = 601
+                    p.write_bytes(f.m.encode(value)); return 0, False
+                s = f.activate(executor=execute)
+                self.assertEqual(s.run('daily'), '연구 차단 2026-11-10')
+                ledger = s.read_ledger(f.auto / '2026-11-10')
+                self.assertEqual((ledger['acquisition_attempts'], ledger['launches']), (1, 0))
+                self.assertNotIn('snapshot_sha256', ledger)
+                self.assertEqual(s.run('continue'), '')
+                self.assertEqual(len(calls), 1)
+
+    def test_base_selection_failure_blocks_day_without_collection_or_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp); s = f.activate(executor=lambda *a, **k: self.fail('no workers'))
+            prior = self.prior(f, s, '2026-11-09')
+            (prior / 'snapshot' / 'US.csv').write_bytes(b'bad')
+            self.assertEqual(s.run('daily'), '연구 차단 2026-11-10')
+            ledger = s.read_ledger(f.auto / '2026-11-10')
+            self.assertEqual((ledger['acquisition_attempts'], ledger['launches']), (0, 0))
+            self.assertEqual(s.run('daily'), '')
+
+    def test_expanded_research_rejects_missing_or_changed_snapshot_binding(self):
+        for binding in (None, '0' * 64):
+            with self.subTest(binding=binding), tempfile.TemporaryDirectory() as tmp:
+                f = ExpandedFixture(tmp); s = f.supervisor(executor=lambda *a, **k: self.fail('no model'))
+                folder = f.m.mkdir(f.auto / '2026-11-10'); f.expanded_frozen(folder / 'snapshot', folder.name)
+                ledger = dict(date=folder.name, launches=0, acquisition_attempts=1, started_epoch=s.day().timestamp())
+                if binding is not None: ledger['snapshot_sha256'] = binding
+                with self.assertRaises(ValueError): s.research(folder, ledger, folder / 'snapshot', 'daily')
+
+    def test_expanded_snapshot_binding_cannot_be_rewritten_in_a_later_ledger_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp); s = f.supervisor(); folder = self.prior(f, s, '2026-11-09')
+            ledger = s.read_ledger(folder); ledger['snapshot_sha256'] = '0' * 64
+            s.save_ledger(folder, ledger)
+            with self.assertRaises(ValueError): s.read_ledger(folder)
+
+    def test_expanded_construction_never_reads_credential_file_values(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp)
+            credentials = {Path(f.config[key]) for key in ('env_file', 'token_file')}
+            for p in credentials: p.write_bytes(b'SYNTHETIC NOT A CREDENTIAL'); p.chmod(0o600)
+            read_bytes = Path.read_bytes; read_text = Path.read_text
+            def guarded_bytes(p, *a, **kw):
+                self.assertNotIn(p, credentials, 'credential value read'); return read_bytes(p, *a, **kw)
+            def guarded_text(p, *a, **kw):
+                self.assertNotIn(p, credentials, 'credential value read'); return read_text(p, *a, **kw)
+            with patch.object(Path, 'read_bytes', guarded_bytes), patch.object(Path, 'read_text', guarded_text):
+                self.assertIsNotNone(f.supervisor())
+
+    def test_optional_expanded_config_accepts_public_catalog_private_seed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = ExpandedFixture(tmp)
+            self.assertIsNotNone(f.supervisor())
+
+
 class PolicyTests(unittest.TestCase):
     def test_idle_continue_does_not_open_or_acquire_worker_lock(self):
         from unittest.mock import patch
