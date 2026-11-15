@@ -7,7 +7,7 @@
 - [x] RSI(14) < 30 매수, > 70 매도 평균회귀 — [2026-11-11 세트](research/2026-11-11_rsi14_hysteresis/publication.json), 완료·reject; IS 선택은30/70 기본형, 채택 아님. [정성 기록](research/2026-11-11_rsi14_hysteresis/research-addendum.md), #37 / PR #39.
 - [x] 볼린저밴드(20, 2σ) 하단 이탈 매수, 중심선 회귀 시 청산 — [2026-11-13 세트](research/2026-11-13_bollinger_reversion/publication.json), 완료·defer; IS 선택은2.5σ 변형, 채택 아님. [정성 기록](research/2026-11-13_bollinger_reversion/research-addendum.md), #53 / PR #55. 후속12-1 모멘텀 #54.
 - [ ] 12-1 모멘텀: 12개월 수익률(최근 1개월 제외) > 0 일 때만 보유
-- [ ] 돈치안 55일 고가 돌파 매수, 20일 저가 이탈 청산 (터틀 변형)
+- [x] 돈치안 55일 고가 돌파 매수, 20일 저가 이탈 청산 (터틀 변형) — [2026-11-15 세트](research/2026-11-15_donchian_breakout/publication.json), 완료·defer; IS 선택은70일 진입창, 채택 아님. [정성 기록](research/2026-11-15_donchian_breakout/research-addendum.md), #68 / PR #70. 후속 MACD #69.
 - [ ] MACD(12,26,9) 시그널선 상향 돌파
 - [ ] 변동성 타기팅: 20일 실현변동성 역수로 포지션 크기 조절 (목표 연 15%)
 - [ ] 200일선 위 + RSI(2) < 10 눌림목 매수
