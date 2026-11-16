@@ -590,17 +590,35 @@ class Supervisor:
         sid = status['set_id']
         require(re.fullmatch(re.escape(folder.name) + r'_[a-z0-9][a-z0-9_-]{0,63}', sid))
         registered = private(Path(self.c['registry']) / sid, directory=True)
-        raw = encode(dict(schema_version=1, set_id=sid, status='completed', conclusion=status['conclusion'],
+        legacy = dict(schema_version=1, set_id=sid, status='completed', conclusion=status['conclusion'],
             attempt_count=status['attempt_count'],
             private_report_sha256=sha(private(registered / 'report.json').read_bytes()),
             evaluation_sha256=sha(private(registered / 'evaluation.json').read_bytes()),
             engine_commit=self.c['engine_commit'],
             data_manifest_sha256=self.frozen_manifest(folder / 'snapshot', folder.name)[1],
             holdout_status='exposed', limitations=['OOS exposed; not independent validation',
-                'Finite preregistered comparison only; not live-trading approval']))
+                'Finite preregistered comparison only; not live-trading approval'])
+        # #81: preregistered candidate ids/parameters and the IS-selected id, never metrics.
+        plan = read_json(registered / 'plan.json')
+        candidates = [dict(id=c['run_id'], parameters=c['parameters']) for c in [plan['baseline'], *plan['variants']]]
+        for c in candidates:
+            require(type(c['id']) is str and c['id'].startswith(sid + '__') and type(c['parameters']) is dict)
+            for key, value in c['parameters'].items():
+                require(type(key) is str and (type(value) in (int, str, bool) or
+                                              (type(value) is float and math.isfinite(value))))
+        selected = read_json(registered / 'selection.json')['selected_run_id']
+        require(selected in [c['id'] for c in candidates])
+        require(type(plan['tracking_issue']) is str and
+                re.fullmatch(r'https://github\.com/seanjeonn/sh-quant/issues/[1-9][0-9]*', plan['tracking_issue']))
+        raw = encode(dict(legacy, schema_version=2, tracking_issue=plan['tracking_issue'],
+                          candidates=candidates, selected_candidate=selected))
         target = folder / 'publication-descriptor.json'
-        if target.exists(): require(private(target).read_bytes() == raw)
-        else: immutable(target, raw)
+        if target.exists():
+            # A descriptor rendered before #81 stays valid for the set it was published for.
+            existing = private(target).read_bytes()
+            require(existing in (raw, encode(legacy)))
+            return existing
+        immutable(target, raw)
         return raw
 
     def publication(self):

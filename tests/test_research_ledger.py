@@ -78,6 +78,20 @@ class ResearchLedger(unittest.TestCase):
         self.assertEqual(research_ledger.grid_position("v002", {"baseline": (1.0,), "v001": (3.0,), "v002": (2.0,)}),
                          "interior")
 
+    def test_publication_candidates_take_precedence_over_prose(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); d = root / "research" / "2026-02-01_donchian_x"; d.mkdir(parents=True)
+            sid = d.name
+            (d / "publication.json").write_text(json.dumps({
+                "conclusion": "defer", "attempt_count": 3, "selected_candidate": sid + "__v002",
+                "candidates": [{"id": sid + "__baseline", "parameters": {"entry": 55}},
+                               {"id": sid + "__v001", "parameters": {"entry": 40}},
+                               {"id": sid + "__v002", "parameters": {"entry": 70}}]}))
+            # Contradicting prose must be ignored once structured fields exist.
+            (d / "research-addendum.md").write_text("IS ordering was v001 (40), baseline (55), then v002 (70).")
+            s = json.loads(run(root))["sets"][0]
+        self.assertEqual((s["selected_candidate"], s["candidate_count"], s["grid_position"]), ("v002", 3, "edge"))
+
 
 if __name__ == "__main__":
     unittest.main()
