@@ -6,9 +6,9 @@ JSON on stdout. Never emits numeric performance (#28): only counts, labels and
 candidate ids. Anything not derivable from committed files is "unknown"/null.
 
 Sources per set (read-only):
-- schema2 sets: publication.json (conclusion, attempt_count) and the IS ranking
-  sentence of research-addendum.md (candidate ids + preregistered parameters);
-  plan.json/selection.json there are hash-only descriptors.
+- schema2 sets: publication.json (conclusion, attempt_count, and since #81
+  candidates/selected_candidate); older descriptors fall back to the IS ranking
+  sentence of research-addendum.md. plan.json/selection.json are hash-only.
 - legacy sets (no publication.json): status.json, selection.json, attempts.jsonl.
 - backlog.md: whether a checked `- [x]` line links the set.
 """
@@ -75,9 +75,28 @@ def schema2_candidates(set_dir):
     return ranked[0][0], {cid: values(v) for cid, v in ranked}
 
 
+def short(run_id):
+    return run_id.split("__", 1)[1] if "__" in run_id else run_id
+
+
+def param_values(p):
+    """Preregistered parameters -> tuple sorted by name; non-numeric -> None."""
+    try:
+        return tuple(float(p[k]) for k in sorted(p)) or None
+    except (TypeError, ValueError):
+        return None
+
+
+def publication_candidates(pub):
+    """#81: schema2 publication descriptors carry candidates/selected_candidate."""
+    if not isinstance(pub.get("candidates"), list) or not pub.get("selected_candidate"):
+        return None
+    return short(pub["selected_candidate"]), {
+        short(c["id"]): param_values(c.get("parameters") or {}) for c in pub["candidates"]}
+
+
 def legacy_candidates(set_dir):
     sel = load(set_dir / "selection.json") or {}
-    short = lambda run_id: run_id.split("__", 1)[1] if "__" in run_id else run_id
     params = {}
     attempts = set_dir / "attempts.jsonl"
     if attempts.is_file():
@@ -85,7 +104,7 @@ def legacy_candidates(set_dir):
             event = json.loads(line)
             if event.get("event") == "start":
                 p = event.get("parameters") or {}
-                params[short(event["run_id"])] = tuple(float(p[k]) for k in sorted(p)) or None
+                params[short(event["run_id"])] = param_values(p)
     ids = [short(r) for r in sel.get("all_attempt_ids", [])]
     selected = sel.get("selected_run_id")
     return (short(selected) if selected else None), {i: params.get(i) for i in ids}
@@ -101,7 +120,8 @@ def ledger(root):
         pub = load(set_dir / "publication.json")
         if pub is not None:
             source, conclusion, attempts = "schema2", pub.get("conclusion"), pub.get("attempt_count")
-            selected, candidates = schema2_candidates(set_dir)
+            # Structured fields first; the addendum prose is the pre-#81 fallback.
+            selected, candidates = publication_candidates(pub) or schema2_candidates(set_dir)
         else:
             status = load(set_dir / "status.json") or {}
             source, conclusion, attempts = "legacy", status.get("conclusion"), status.get("strategy_attempts")

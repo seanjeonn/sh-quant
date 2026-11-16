@@ -52,6 +52,12 @@ class Fixture:
         self.configpath = self.private / 'config.json'
         self.save()
 
+    def finish(self, sid, private=b'{}\n'):
+        """Private completed-set artifacts the publication renderer reads (#81)."""
+        reg = Path(self.config['registry']) / sid
+        for name in ('report', 'evaluation'): self.m.immutable(reg / (name + '.json'), private)
+        self.m.immutable(reg / 'selection.json', self.m.encode(dict(selected_run_id=sid + '__v002', private='SECRET rank')))
+
     def register(self, sid='2026-11-10_synthetic_pending', **overrides):
         from test_research_contract import plan
         from unittest.mock import patch
@@ -725,8 +731,7 @@ class PolicyTests(unittest.TestCase):
                     self.assertNotIn('--output',argv); calls.append(argv); return 0,False
                 s=f.activate(executor=execute,verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='defer',attempt_count=3))
                 folder=f.register(sid)
-                for name in ('report','evaluation'):
-                    f.m.immutable(Path(f.config['registry'])/sid/(name+'.json'),b'{}\n')
+                f.finish(sid)
                 ledger=dict(schema_version=1,date='2026-11-10',status='publication_pending',launches=0,
                     acquisition_attempts=0,started_epoch=s.day().timestamp(),policy_sha256=s.policy_sha256)
                 s.save_ledger(folder,ledger)
@@ -745,8 +750,7 @@ class PolicyTests(unittest.TestCase):
                 f=Fixture(tmp); sid='2026-11-10_synthetic_publication'
                 s=f.activate(verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='defer',attempt_count=3))
                 folder=f.register(sid); wt=Path(f.config['workspace_root'])/'2026-11-10'
-                for name in ('report','evaluation'):
-                    f.m.immutable(Path(f.config['registry'])/sid/(name+'.json'),b'{"private":"secret"}\n')
+                f.finish(sid,b'{"private":"secret"}\n')
                 status=s.day_sets('2026-11-10')[0]
                 raw=s.publication_descriptor(folder,status)
                 git(f.core,'remote','add','origin','https://github.com/seanjeonn/sh-quant.git')
@@ -803,8 +807,7 @@ class PolicyTests(unittest.TestCase):
             f = Fixture(tmp); sid='2026-11-10_synthetic_publish'
             s = f.activate(verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='defer',attempt_count=3))
             folder = f.register(sid)
-            for name in ('report', 'evaluation'):
-                f.m.immutable(Path(f.config['registry']) / sid / (name+'.json'), b'{"private":"SECRET metrics"}\n')
+            f.finish(sid,b'{"private":"SECRET metrics"}\n')
             s.save_ledger(folder,dict(schema_version=1,date='2026-11-10',status='publication_pending',launches=0,
                 acquisition_attempts=0,started_epoch=s.day().timestamp(),policy_sha256=s.policy_sha256))
             fd=os.open(f.auto / '.supervisor.lock',os.O_CREAT|os.O_RDWR,0o600)
@@ -816,8 +819,30 @@ class PolicyTests(unittest.TestCase):
                 obj=json.loads(raw)
                 self.assertEqual(obj['set_id'],sid); self.assertEqual(obj['conclusion'],'defer')
                 self.assertEqual(obj['attempt_count'],3)
+                self.assertEqual(obj['schema_version'],2)
+                self.assertEqual(obj['tracking_issue'],'https://github.com/seanjeonn/sh-quant/issues/30')
+                self.assertEqual([c['id'] for c in obj['candidates']],[sid+'__baseline',sid+'__v002',sid+'__v003'])
+                self.assertTrue(all(isinstance(c['parameters'],dict) and c['parameters'] for c in obj['candidates']))
+                self.assertEqual(obj['selected_candidate'],sid+'__v002')
                 self.assertNotIn('SECRET',raw.decode()); self.assertNotIn(str(f.root),raw.decode())
             finally: os.close(fd)
+
+    def test_publication_descriptor_keeps_pre_81_render_and_rejects_other_bytes(self):
+        for existing in ('legacy', 'other'):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp); sid = '2026-11-10_synthetic_legacy'
+                s = f.activate(verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='reject',attempt_count=3))
+                folder = f.register(sid); f.finish(sid)
+                status = s.day_sets('2026-11-10')[0]
+                current = json.loads(s.publication_descriptor(folder, status))
+                (folder / 'publication-descriptor.json').unlink()
+                legacy = {k: v for k, v in current.items() if k not in ('tracking_issue', 'candidates', 'selected_candidate')}
+                legacy['schema_version'] = 1
+                raw = f.m.encode(legacy) if existing == 'legacy' else f.m.encode(dict(legacy, conclusion='accept'))
+                f.m.immutable(folder / 'publication-descriptor.json', raw)
+                if existing == 'legacy': self.assertEqual(s.publication_descriptor(folder, status), raw)
+                else:
+                    with self.assertRaises(ValueError): s.publication_descriptor(folder, status)
 
     def test_launch_scope_environment_and_nested_owned_trial_cannot_escape(self):
         for timeout in (False, True):
