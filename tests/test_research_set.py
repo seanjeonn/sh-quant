@@ -227,7 +227,8 @@ class LifecycleTests(EngineFixture):
             self.checkpoint(runner, 'plan'); runner.step()
             end = next(e for e in runner.events if e['event'] == 'end')
             usage = end['rusage']
-            self.assertEqual(set(usage), {'user_seconds', 'system_seconds', 'max_rss_bytes'})
+            self.assertEqual(set(usage), {'user_seconds', 'system_seconds', 'max_rss_bytes', 'complete'})
+            self.assertIs(usage['complete'], True)
             self.assertGreater(usage['user_seconds'] + usage['system_seconds'], 0)
             self.assertGreater(usage['max_rss_bytes'], 1 << 20)
             # Recovered (pre-#71) end events carry no rusage and must keep verifying.
@@ -237,6 +238,20 @@ class LifecycleTests(EngineFixture):
             runner.step()
             self.assertNotIn('rusage', [e for e in runner.events if e['event'] == 'end'][0])
             self.assertEqual(runner.verify()['attempt_count'], 1)
+
+    def test_timeout_sigkilled_engine_marks_rusage_incomplete(self):
+        # #83 repro: TERM-ignoring engine is group-SIGKILLed unreaped, so its usage is lost.
+        hog = ('import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+               'b = bytearray(64 << 20); t = time.time()\nwhile time.time() - t < 5: pass')
+        child = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', hog], timeout=.7)
+        self.assertEqual(child.wait(), -signal.SIGKILL)
+        self.assertTrue(child.timed_out)
+        self.assertIs(child.rusage['complete'], False)
+        # A TERM-respecting engine is reaped after timeout: its usage is complete.
+        child = r.OwnedTrial(subprocess.Popen, [sys.executable, '-c', 'import time; time.sleep(5)'], timeout=.3)
+        child.wait()
+        self.assertTrue(child.timed_out)
+        self.assertIs(child.rusage['complete'], True)
 
     def test_successful_committed_result_without_end_is_recovered_not_rerun(self):
         self.init()

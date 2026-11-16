@@ -42,6 +42,29 @@ class SetMetricsTests(EngineFixture):
         self.assertIsNone(out['phases_seconds']['trials'])
 
 
+class IncompleteUsageTests(EngineFixture):
+    def test_incomplete_and_legacy_timeout_usage_are_excluded_from_sums(self):
+        folder = self.base / 'registry' / '2026-11-16_synthetic'; folder.mkdir(parents=True, mode=0o700)
+        folder.parent.chmod(0o700)
+        usage = lambda cpu, **extra: dict(user_seconds=cpu, system_seconds=0.0, max_rss_bytes=cpu * 1e6, **extra)
+        events = [{'event': 'init', 'time': 0.0}]
+        for i, (timeout, rusage) in enumerate([
+                (False, usage(2.0, complete=True)),    # counted
+                (True, usage(0.01, complete=False)),   # engine lost to group SIGKILL (#83)
+                (True, usage(0.02)),                   # pre-#83 timeout: unknown, not counted
+                (False, usage(3.0))]):                 # pre-#83 normal exit: counted
+            rid = 'r%d' % i
+            events += [{'event': 'start', 'run_id': rid, 'role': 'variant', 'time': 10.0 * i},
+                       {'event': 'end', 'run_id': rid, 'status': 'ok', 'timeout': timeout,
+                        'rusage': rusage, 'time': 10.0 * i + 5}]
+        write(folder / 'events.jsonl', ''.join(json.dumps(e) + '\n' for e in events).encode())
+        out = m.set_metrics(folder)
+        self.assertEqual([t['rusage_complete'] for t in out['trials']], [True, False, False, True])
+        self.assertEqual(out['trial_cpu_seconds_sum'], 5.0)
+        self.assertEqual(out['trial_max_rss_bytes'], 3e6)
+        self.assertEqual(out['trials_rusage_incomplete'], 2)
+
+
 class DayMetricsTests(EngineFixture):
     def make_day(self):
         day = self.base / 'private' / '2026-11-16'; day.mkdir(parents=True, mode=0o700); day.parent.chmod(0o700)

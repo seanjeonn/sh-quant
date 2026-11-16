@@ -808,7 +808,9 @@ class OwnedTrial:
                 rc = child.poll()
                 if rc is None: rc = -signal.SIGKILL
             else: rc = child.returncode
-            value = {'exit_code': rc, 'timeout': timed_out}
+            # False when the engine was left for the group SIGKILL below: it is then never
+            # reaped here, so its CPU/RSS is missing from our wait4 usage (#83).
+            value = {'exit_code': rc, 'timeout': timed_out, 'reaped': child.returncode is not None}
         except BaseException:
             pass
         finally:
@@ -830,12 +832,14 @@ class OwnedTrial:
             # max RSS is the largest single process in that tree, so the forked
             # Python supervisor bounds it from below: an upper bound for the engine.
             self.rusage = {'user_seconds': round(usage.ru_utime, 6), 'system_seconds': round(usage.ru_stime, 6),
-                           'max_rss_bytes': usage.ru_maxrss * (1 if sys.platform == 'darwin' else 1024)}
+                           'max_rss_bytes': usage.ru_maxrss * (1 if sys.platform == 'darwin' else 1024),
+                           'complete': False}
             try:
                 raw = os.read(self.report, 4096)
                 value = json.loads(raw)
                 require(not value.get('error'), 'engine_launch_failed')
                 self.returncode = value['exit_code']; self.timed_out = value['timeout']
+                self.rusage['complete'] = value['reaped'] is True
             finally:
                 os.close(self.report); os.close(self.control)
         return self.returncode
