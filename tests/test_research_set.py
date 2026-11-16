@@ -221,6 +221,23 @@ class LifecycleTests(EngineFixture):
             write(detail, {'id': first['run_id'], 'tampered': True})
             with self.assertRaises(r.Blocked): runner.verify()
 
+    def test_trial_end_records_child_rusage_and_legacy_end_still_verifies(self):
+        self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan'); runner.step()
+            end = next(e for e in runner.events if e['event'] == 'end')
+            usage = end['rusage']
+            self.assertEqual(set(usage), {'user_seconds', 'system_seconds', 'max_rss_bytes'})
+            self.assertGreater(usage['user_seconds'] + usage['system_seconds'], 0)
+            self.assertGreater(usage['max_rss_bytes'], 1 << 20)
+            # Recovered (pre-#71) end events carry no rusage and must keep verifying.
+            path = runner.folder / 'events.jsonl'; lines = path.read_bytes().splitlines(keepends=True)
+            path.write_bytes(b''.join(lines[:-1]))
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            runner.step()
+            self.assertNotIn('rusage', [e for e in runner.events if e['event'] == 'end'][0])
+            self.assertEqual(runner.verify()['attempt_count'], 1)
+
     def test_successful_committed_result_without_end_is_recovered_not_rerun(self):
         self.init()
         with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:

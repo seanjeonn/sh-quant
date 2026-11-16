@@ -18,6 +18,7 @@ import signal
 import socket
 import stat
 import subprocess
+import sys
 import time
 from zoneinfo import ZoneInfo
 
@@ -629,11 +630,12 @@ class Runner:
             finally:
                 stdout.flush(); stderr.flush(); os.fsync(stdout.fileno()); os.fsync(stderr.fileno())
         self.verify_inputs()
+        usage = {'rusage': child.rusage} if child.rusage is not None else {}
         if (output / 'index.json').exists():
             _, proof = self.result(self.starts()[-1])
-            self.append(dict(proof, event='end', run_id=rid, status='ok', exit_code=rc, timeout=timed_out))
+            self.append(dict(proof, event='end', run_id=rid, status='ok', exit_code=rc, timeout=timed_out, **usage))
         else:
-            self.append({'event': 'end', 'run_id': rid, 'status': 'failed', 'exit_code': rc, 'timeout': timed_out})
+            self.append({'event': 'end', 'run_id': rid, 'status': 'failed', 'exit_code': rc, 'timeout': timed_out, **usage})
 
     def step(self):
         state = self.verify()['state']
@@ -751,7 +753,7 @@ class OwnedTrial:
             kwargs['env'] = env
         self.report, report_write = os.pipe()
         control_read, self.control = os.pipe()
-        self.returncode = None; self.timed_out = False; self.reaped = False
+        self.returncode = None; self.timed_out = False; self.reaped = False; self.rusage = None
         try:
             self.pid = os.fork()
         except BaseException:
@@ -822,8 +824,13 @@ class OwnedTrial:
 
     def wait(self):
         if not self.reaped:
-            os.waitpid(self.pid, 0)
+            _, _, usage = os.wait4(self.pid, 0)
             self.reaped = True
+            # Covers the fork supervisor and every descendant it reaped (the engine).
+            # max RSS is the largest single process in that tree, so the forked
+            # Python supervisor bounds it from below: an upper bound for the engine.
+            self.rusage = {'user_seconds': round(usage.ru_utime, 6), 'system_seconds': round(usage.ru_stime, 6),
+                           'max_rss_bytes': usage.ru_maxrss * (1 if sys.platform == 'darwin' else 1024)}
             try:
                 raw = os.read(self.report, 4096)
                 value = json.loads(raw)
