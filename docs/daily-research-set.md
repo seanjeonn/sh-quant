@@ -100,7 +100,7 @@ completed에는 **모두** 필요하다.
 - `conclusion: accept | defer | reject`, 근거, 교훈, 구체적인 다음 실험.
 - 미해결 버그/남은 기능은 프로젝트 양식의 기존/신규 이슈로 연결.
 
-blocked는 `conclusion: null`, 원인, 완료하지 못한 단계, 실제 부분 결과, 재개 조건, 관련 이슈를 남긴다. 데이터/코드 오류·실행/예산 부족을 reject/defer로 위장하지 않는다. 세트 완료는 자기 `research/<set-id>/publication.json`으로만 기록한다. 연구 PR은 공유 파일 `backlog.md`를 수정하지 않으며, backlog 체크는 completed 세트 PR이 main에 병합된 뒤 통합 단계의 별도 변경으로 한다(#73). 가설 선정 시 기존 `research/` 세트나 열린 연구 PR이 다루는 backlog 항목은 건너뛴다. 하루 마감 시 미완료는 그대로 보고하며 가짜 완료를 만들지 않는다.
+blocked는 `conclusion: null`, 원인, 완료하지 못한 단계, 실제 부분 결과, 재개 조건, 관련 이슈를 남긴다. 데이터/코드 오류·실행/예산 부족을 reject/defer로 위장하지 않는다. 세트 완료는 자기 `research/<set-id>/publication.json`으로만 기록한다. 연구 PR은 공유 파일 `backlog.md`를 수정하지 않으며, backlog 체크는 completed 세트 PR이 main에 병합된 뒤 통합 단계의 별도 변경으로 한다(#73). 통합 단계(#78): main 병합 후 `python3 tools/backlog_sync.py pending`으로 체크되지 않은 게시 세트를 확인하고, 세트마다 해당 가설 줄을 `python3 tools/backlog_sync.py mark <set-id> --item "<그 줄에만 있는 문구>"`로 체크한다. 어느 줄인지 도구가 추측하지 않으므로 통합하는 사람/에이전트가 지정한다. 이 변경은 별도 `chore/backlog-*` 브랜치·PR로 올리며 main 병합은 별도 승인을 따른다. 여러 세트를 한 번에 반영해도 된다. 가설 선정 시 기존 `research/` 세트나 열린 연구 PR이 다루는 backlog 항목은 건너뛴다. 하루 마감 시 미완료는 그대로 보고하며 가짜 완료를 만들지 않는다.
 
 ## 개발·게시·주기적 개선
 
