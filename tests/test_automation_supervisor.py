@@ -740,7 +740,7 @@ class PolicyTests(unittest.TestCase):
     def test_final_publication_requires_independent_remote_blob_pr_and_current_identity(self):
         from unittest.mock import patch
         for mutation in ('missing', 'remote', 'blob', 'pr_head', 'pr_base', 'pr_url', 'pr_files', 'valid',
-                         'closed_in_main', 'closed_other_base', 'merged_in_main', 'closed_not_in_main', 'closed_diverged', 'draft_state'):
+                         'open_backlog', 'merged_backlog', 'closed_in_main', 'closed_other_base', 'merged_in_main', 'closed_not_in_main', 'closed_diverged', 'draft_state'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
                 f=Fixture(tmp); sid='2026-11-10_synthetic_publication'
                 s=f.activate(verifier=lambda *a: dict(state='completed',set_id=sid,conclusion='defer',attempt_count=3))
@@ -760,10 +760,14 @@ class PolicyTests(unittest.TestCase):
                 receipt=dict(schema_version=1,set_id=sid,pr_number=34,commit=commit,branch=branch,
                              report_path=rel,report_sha256=f.m.sha(raw),pr_url=url)
                 if mutation!='missing': f.m.immutable(folder/'publication.json',f.m.encode(receipt))
-                pr=dict(url=url,state='OPEN',baseRefName='feature#33',headRefName=branch,headRefOid=commit,
-                        files=[dict(path=rel),dict(path='backlog.md'),dict(path='strategies/'+sid+'_baseline.toml')])
+                # #73: open research PRs target main regardless of the core checkout branch.
+                pr=dict(url=url,state='OPEN',baseRefName='main',headRefName=branch,headRefOid=commit,
+                        files=[dict(path=rel),dict(path='strategies/'+sid+'_baseline.toml')])
                 if mutation=='pr_head': pr['headRefOid']='a'*40
-                if mutation=='pr_base': pr['baseRefName']='main'
+                if mutation=='pr_base': pr['baseRefName']='feature#33'
+                # #73: the shared backlog.md is rejected on open PRs; legacy merged sets (#67/#70) still verify.
+                if mutation.endswith('_backlog'): pr['files'].append(dict(path='backlog.md'))
+                if mutation=='merged_backlog': pr['state']='MERGED'
                 if mutation=='pr_url': pr['url']='https://github.com/other/repo/pull/34'
                 if mutation=='pr_files': pr['files'].append(dict(path='src/main.rs'))
                 # #41: an archived PR is accepted only when its exact head is already contained in remote main.
@@ -782,7 +786,7 @@ class PolicyTests(unittest.TestCase):
                             started_epoch=s.day().timestamp(),policy_sha256=s.policy_sha256)
                 s.save_ledger(folder,ledger)
                 with patch.object(s,'git',side_effect=read):
-                    if mutation in ('missing','valid','closed_in_main','closed_other_base','merged_in_main'):
+                    if mutation in ('missing','valid','closed_in_main','closed_other_base','merged_in_main','merged_backlog'):
                         result=s.complete(folder,ledger,status)
                         self.assertEqual(ledger['status'],'publication_pending' if mutation=='missing' else 'completed')
                         self.assertIn('연구 대기' if mutation=='missing' else '연구 완료',result)

@@ -31,4 +31,11 @@ class AutomationDocumentation(unittest.TestCase):
         self.assertIn('allowlist',text)
         self.assertIn('읽기 전용',text)
 
+    def test_research_pr_merge_order_contract(self):
+        # #73: research PRs share no files, target main, and keep checkpoint ancestry.
+        for name in ('docs/daily-research-set.md','hermes/SKILL.md'):
+            text=(ROOT/name).read_text()
+            for token in ('`main`','rebase','force push','backlog.md','publication.json','#73'):
+                self.assertIn(token,text,name)
+
 if __name__=='__main__':unittest.main()

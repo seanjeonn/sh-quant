@@ -633,8 +633,6 @@ class Supervisor:
         require(receipt['pr_url'] == url)
         worktree = self.worktree(folder.name)
         self.managed_repo(worktree); self.managed_repo(self.c['core_repo'])
-        base = self.git(self.c['core_repo'], 'branch', '--show-current')
-        require(base and base != branch)
         require(self.git(worktree, 'rev-parse', 'HEAD') == commit)
         require(self.git(worktree, 'ls-remote', '--exit-code', 'origin', 'refs/heads/' + branch).splitlines()
                 == [commit + '\trefs/heads/' + branch])
@@ -642,13 +640,16 @@ class Supervisor:
         pr = self.github('pr', number)
         require(pr['url'] == url and pr['headRefName'] == branch and pr['headRefOid'] == commit)
         if pr['state'] == 'OPEN':
-            require(pr['baseRefName'] == base)
+            # #73: research PRs always target main so sets integrate in any order.
+            require(pr['baseRefName'] == 'main')
         else:
             # Archived after integration (#41): the exact published head must already be contained in
             # remote main. Closed alone is not enough. Its original base is not compared with the
             # current checkout branch, which changes on a re-pin (#45).
             require(pr['state'] in ('CLOSED', 'MERGED'))
             require(self.github('compare', commit)['status'] in ('behind', 'identical'))
+        # #73: backlog.md is shared, so open research PRs must not edit it; merged legacy sets did.
+        shared = () if pr['state'] == 'OPEN' else ('backlog.md',)
         files = pr['files']; require(type(files) is list and files)
         names = [entry['path'] for entry in files]
         require(len(names) == len(set(names)) and rel in names)
@@ -656,7 +657,7 @@ class Supervisor:
             require(type(name) is str and '..' not in Path(name).parts and str(Path(name)) == name and
                     (name.startswith('research/' + sid + '/') or
                      re.fullmatch(r'strategies/' + re.escape(sid) + r'[a-z0-9_-]*\.toml', name) or
-                     name == 'backlog.md'))
+                     name in shared))
         return True
 
     def complete(self, folder, ledger, status):
@@ -701,15 +702,17 @@ only safe research artifacts on this working branch. Once runner completed, use 
 publication_command below (--mode publication with the ACTUAL supplied --config path).
 It renders deterministic public-safe JSON and persists private_day/publication-descriptor.json.
 Copy EXACT bytes to research/SET_ID/publication.json; never invent a public summary.
-Commit/push on research/DATE_daily, open/update PR on seanjeonn/sh-quant with base equal
-to the pinned core_repo working branch. Read back remote head, exact report blob and PR.
+Commit/push on research/DATE_daily, open/update PR on seanjeonn/sh-quant with base main.
+Never rebase, reset or force-push the research branch: checkpoint commits must stay ancestors.
+Read back remote head, exact report blob and PR.
 Write private 0600 private_day/publication.json receipt with exactly schema_version=1,
 set_id, pr_number (positive integer), commit (40 lowercase hex), branch,
 report_path (repository-relative under research/SET_ID/), report_sha256 (exact bytes),
 pr_url (https://github.com/seanjeonn/sh-quant/pull/NUMBER).
-Only current-set research/ strategies/ and backlog.md may appear in the PR.
+Only current-set research/ and strategies/ files may appear in the PR; never edit backlog.md.
 If runner is already completed, do NOT rerun trials: finish publication and receipt only.
-Mark backlog completed ONLY after full completed verification. Preserve
+Completion is recorded only by research/SET_ID/publication.json. Skip backlog items
+already covered by an existing research/ set or open research PR. Preserve
 all private evidence and failed attempts; raw model stdout is never proof of completion.
 Do not modify src/, tools/, Cargo.*, config, engine, dashboard, old research/results or
 another profile. No main merge/auto-merge, deployment/release, paid/live/account/order
