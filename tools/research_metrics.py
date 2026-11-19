@@ -30,10 +30,13 @@ def set_metrics(folder):
     for e in events:
         if e['event'] == 'end' and e['run_id'] in starts:
             usage = e.get('rusage') or {}
+            # Pre-#83 events lack `complete`; a timeout there may have lost the engine's usage.
+            complete = bool(usage) and usage.get('complete', not e.get('timeout'))
             trials.append({'role': starts[e['run_id']]['role'], 'status': e['status'],
                            'wall_seconds': span(starts[e['run_id']]['time'], e['time']),
-                           'cpu_seconds': round(usage['user_seconds'] + usage['system_seconds'], 6) if usage else None,
-                           'max_rss_bytes': usage.get('max_rss_bytes')})
+                           'rusage_complete': complete if usage else None,
+                           'cpu_seconds': round(usage['user_seconds'] + usage['system_seconds'], 6) if complete else None,
+                           'max_rss_bytes': usage.get('max_rss_bytes') if complete else None})
     first_start = min((e['time'] for e in starts.values()), default=None)
     last_end = max((e['time'] for e in events if e['event'] == 'end'), default=None)
     finish = first('complete') or first('blocked')
@@ -51,6 +54,7 @@ def set_metrics(folder):
         },
         'trial_wall_seconds_sum': round(sum(t['wall_seconds'] for t in trials), 3),
         'trial_cpu_seconds_sum': round(sum(cpu), 6) if cpu else None,
+        'trials_rusage_incomplete': sum(t['rusage_complete'] is False for t in trials),
         'trial_max_rss_bytes': max((t['max_rss_bytes'] for t in trials if t['max_rss_bytes']), default=None),
     }
 
