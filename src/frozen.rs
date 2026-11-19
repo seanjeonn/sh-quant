@@ -9,7 +9,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-fn strict_date(s: &str) -> Result<chrono::NaiveDate> {
+pub fn strict_date(s: &str) -> Result<chrono::NaiveDate> {
     ensure!(
         s.len() == 10
             && s.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 {
@@ -1269,8 +1269,8 @@ pub(crate) mod tests {
                     )
                 })
                 .collect();
-            let a = crate::backtest::run_market(&sig, &bars, m).unwrap();
-            let b = crate::backtest::run_market(&sig, &reference, m).unwrap();
+            let a = crate::backtest::run_market(&sig, &bars, m, None).unwrap();
+            let b = crate::backtest::run_market(&sig, &reference, m, None).unwrap();
             assert_eq!(
                 serde_json::to_value(a.metrics).unwrap(),
                 serde_json::to_value(b.metrics).unwrap()

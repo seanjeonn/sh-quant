@@ -5,6 +5,8 @@
 //! - one-way cost per unit of turnover
 //! - equal weight across the market universe; benchmark = equal-weight buy & hold
 //! - in-sample <= IS_END, out-of-sample >= IS_END
+//! - optional sealed holdout (#109): with a holdout start H, IS/OOS use dates < H only
+//!   and dates >= H form a separate `holdout` split
 
 use std::collections::BTreeMap;
 
@@ -114,6 +116,8 @@ pub fn metrics(r: &[f64], expo: Option<&[f64]>) -> Result<Metrics> {
 pub struct Split {
     pub is: Metrics,
     pub oos: Metrics,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub holdout: Option<Metrics>,
 }
 
 #[derive(Serialize, Debug)]
@@ -133,7 +137,10 @@ fn week_end(d: NaiveDate) -> NaiveDate {
     d + Days::new(6 - d.weekday().num_days_from_monday() as u64)
 }
 
-pub fn run_market(sig: &Node, data: &[(String, Bars)], market: &str) -> Result<MarketResult> {
+pub fn run_market(sig: &Node, data: &[(String, Bars)], market: &str, holdout: Option<NaiveDate>) -> Result<MarketResult> {
+    if holdout.is_some_and(|h| h <= is_end()) {
+        bail!("holdout start must be after the in-sample end");
+    }
     let c = cost(market);
     // per asset: (date, strategy return, buy&hold return, position held)
     type Row = (NaiveDate, f64, Option<f64>, Option<f64>);
@@ -173,8 +180,9 @@ pub fn run_market(sig: &Node, data: &[(String, Bars)], market: &str) -> Result<M
     let b: Vec<f64> = acc.values().map(|a| avg(a[2], a[3])).collect();
     let e: Vec<f64> = acc.values().map(|a| avg(a[4], a[5])).collect();
 
-    let split = |lo: bool| -> Result<Metrics> {
-        let idx: Vec<usize> = (0..dates.len()).filter(|&i| (dates[i] <= is_end()) == lo || dates[i] == is_end()).collect();
+    let sealed = |i: usize| holdout.is_some_and(|h| dates[i] >= h);
+    let window = |keep: &dyn Fn(usize) -> bool| -> Result<Metrics> {
+        let idx: Vec<usize> = (0..dates.len()).filter(|&i| keep(i)).collect();
         let pick = |v: &[f64]| idx.iter().map(|&i| v[i]).collect::<Vec<f64>>();
         let mut ms = metrics(&pick(&s), Some(&pick(&e)))?;
         let mb = metrics(&pick(&b), None)?;
@@ -182,7 +190,12 @@ pub fn run_market(sig: &Node, data: &[(String, Bars)], market: &str) -> Result<M
         ms.bh_cagr = Some(mb.cagr);
         Ok(ms)
     };
-    let metrics = Split { is: split(true)?, oos: split(false)? };
+    let split = |lo: bool| window(&|i| !sealed(i) && ((dates[i] <= is_end()) == lo || dates[i] == is_end()));
+    let metrics = Split {
+        is: split(true)?,
+        oos: split(false)?,
+        holdout: if holdout.is_some() { Some(window(&sealed)?) } else { None },
+    };
 
     let mut weeks: BTreeMap<NaiveDate, (f64, f64)> = BTreeMap::new();
     let (mut es, mut eb) = (1.0, 1.0);
@@ -232,6 +245,28 @@ mod tests {
         let b = Bars::from_close((0..300).map(|i| 100.0 + (i as f64 / 7.0).sin()).collect());
         let sig = compile("sma(close, 20) < close", &|_| bail!("no refs")).unwrap();
         assert_eq!(signal_checked(&sig, &b).unwrap().len(), 300);
+    }
+
+    #[test]
+    fn holdout_split_keeps_sealed_is_oos_identical() {
+        // #109: IS/OOS with --holdout-start must equal a run on data sealed before it.
+        let h = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let mk = |k: f64| Bars::from_close((0..2000).map(|i| 100.0 + (i as f64 / k).sin() * 9.0 + i as f64 * 0.01).collect());
+        let full = vec![("A".to_string(), mk(7.0)), ("B".to_string(), mk(11.0))];
+        let sealed: Vec<_> = full
+            .iter()
+            .map(|(t, b)| (t.clone(), b.head(b.dates.iter().position(|d| *d >= h).unwrap())))
+            .collect();
+        let sig = compile("sma(close, 20) < close", &|_| bail!("no refs")).unwrap();
+        let a = run_market(&sig, &full, "US", Some(h)).unwrap().metrics;
+        let b = run_market(&sig, &sealed, "US", None).unwrap().metrics;
+        let json = |m: &Metrics| serde_json::to_value(m).unwrap();
+        assert_eq!(json(&a.is), json(&b.is));
+        assert_eq!(json(&a.oos), json(&b.oos));
+        assert!(a.holdout.is_some());
+        assert!(serde_json::to_value(&b).unwrap().get("holdout").is_none());
+        // A holdout inside IS would leak selection data.
+        assert!(run_market(&sig, &full, "US", Some(is_end())).is_err());
     }
 
     #[test]
