@@ -37,6 +37,7 @@ cargo run --release --locked -q -- lesson <run-id> "<실제 결과에 근거한 
 ```
 
 현재 `sweep`, `research`, `--is-only`, `--holdout` 명령은 없다. 이미 구현된 것처럼 호출하거나 완료를 보고하지 않는다.
+`run ... --holdout-start`는 `tools/holdout.py open` 전용이다(#109). 연구 세트 trial에서 쓰지 않는다.
 
 토스 입력은 `docs/toss-data.md`를 먼저 읽고 다음 경로를 사용한다. 원본/CSV/수치 결과/로그는 Git 밖 private 디렉터리(700/600)에 보관하며 공개 `results/`에 쓰지 않는다.
 

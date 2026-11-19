@@ -931,5 +931,34 @@ class InitTests(Fixture):
         with self.assertRaises(r.Blocked): r.initialize(self.registry, alias, self.repo, self.binary, self.manifest)
 
 
+class SealedPlanTests(EngineFixture):
+    """#109: a sealed plan only runs on input cut off at its holdout start."""
+
+    def seal(self, cutoff):
+        data = json.loads(self.manifest.read_bytes()); data['cutoff_exclusive'] = cutoff
+        write(self.manifest, data)
+        self.plan.update(holdout_status='sealed', holdout_start='2026-12-01',
+                         machine_policy=dict(self.plan['machine_policy'], holdout='holdout_forward_v1'),
+                         data_manifest_sha256=hashlib.sha256(self.manifest.read_bytes()).hexdigest())
+        write(self.planpath, self.plan)
+
+    def test_sealed_lifecycle_records_sealed_status(self):
+        self.seal('2026-12-01'); self.init()
+        with r.Runner(self.registry, self.plan['set_id'], launch=self.launch) as runner:
+            self.checkpoint(runner, 'plan')
+            for _ in range(4): runner.step()
+            self.checkpoint(runner, 'selection'); runner.step(); runner.step()
+            self.assertEqual(runner.verify()['state'], 'completed')
+            for name in ('selection', 'report', 'lessons'):
+                self.assertEqual(json.loads((runner.folder / (name + '.json')).read_bytes())['holdout_status'], 'sealed')
+            self.assertEqual(json.loads(runner.descriptor('plan'))['holdout_status'], 'sealed')
+
+    def test_input_after_holdout_start_is_blocked(self):
+        for cutoff in ('2026-12-02', None):
+            with self.subTest(cutoff=cutoff):
+                self.seal(cutoff)
+                with self.assertRaises(r.Blocked): self.init()
+
+
 if __name__ == '__main__':
     unittest.main()

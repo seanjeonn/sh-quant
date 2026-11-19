@@ -27,7 +27,8 @@
 ### 3.2 개봉 (opening)
 
 - 개봉 대상: 기존 `sharpe_excess_mdd_v1`으로 **accept**를 받은 선택 후보만. defer/reject는 열지 않는다(holdout 소모 방지).
-- 시점: 해당 세트의 selection·evaluation checkpoint 이후, 그리고 `S` 이후 누적 봉이 최소 길이 `L` 이상일 때. 부족하면 상태 `holdout_pending`으로 대기하고 같은 세트 ID로 재개한다.
+- 시점: 해당 세트가 completed된 뒤, `S` 이후 누적 봉이 두 시장 모두 `L` 이상일 때. 부족하면 `holdout_pending`을 반환하고 아무것도 기록하지 않는다.
+- 개봉은 일일 runner 상태가 아니라 별도 도구 `tools/holdout.py open`이 한다. completed 세트는 불변이므로 runner 해시 체인에 몇 달 뒤의 단계를 덧붙이지 않는다. 도구는 `Runner.verify()`로 세트를 재검증한 뒤 private ledger에 `open`을 먼저 기록하고 엔진을 실행한다. 그래서 결과를 본 뒤 중단돼도 다시 열 수 없다.
 - 계산: 엔진에 holdout 구간 지표를 추가한다. `run`에 `--holdout-start S`를 주면 기존 IS/OOS는 `date < S`로만 계산하고, `date >= S` 구간 지표를 `holdout` split으로 따로 낸다. 신호 워밍업은 전체 이력을 쓰고 기존 truncation 재검증이 lookahead를 막는다. **엔진 변경은 이것 하나다.**
 - 판정: 새 정책 `holdout_forward_v1`. 시장별 holdout Sharpe > 0 그리고 평균 holdout excess CAGR ≥ 0이면 `accept`, 아니면 `defer`. 개봉 결과로 후보·파라미터를 바꾸지 않는다.
 - 개봉은 후보당 1회. 결과 수치는 private, 공개 기록에는 pass/fail과 private 증거 SHA-256만 남긴다.
@@ -45,14 +46,16 @@
 
 ## 4. 변경 범위 (구현 시)
 
-| 영역 | 변경 | 규모 |
+| 영역 | 변경 | 단계 |
 |---|---|---|
-| `tools/automation_supervisor.py` | 봉인 뷰 생성·검증, 정책에 `S` 바인딩 | 중 |
-| `src/backtest.rs`, `src/main.rs` | `--holdout-start`, `holdout` split | 소 |
-| `tools/research_contract.py` | `holdout_status: sealed`, `holdout_forward_v1` 정책, 새 machine policy 버전 | 중 |
-| `tools/research_set.py` | `holdout_pending` 상태, 개봉 checkpoint 이후 1회 실행 | 중 |
-| `tools/research_ledger.py` | epoch별 개봉 횟수·pass/fail, 누적 시도 수 | 소 |
-| 문서 | `daily-research-set.md`, `research-runner.md`, `hermes/SKILL.md` | 소 |
+| `src/backtest.rs`, `src/main.rs` | `run ... --holdout-start S`, `holdout` split | A (#109) |
+| `tools/research_contract.py` | sealed plan(`holdout_status: sealed`, `holdout_start`, `machine_policy.holdout = holdout_forward_v1`), `evaluate_holdout` | A |
+| `tools/research_set.py` | sealed plan은 manifest `cutoff_exclusive <= S` 강제, 산출물에 holdout_status 전파 | A |
+| `tools/holdout.py` | `seal`(봉인 뷰 파생), `open`(1회 개봉, private ledger) | A |
+| `tools/research_ledger.py` | epoch별 sealed 세트 수·시도 수·개봉 결과 | A |
+| `tools/automation_supervisor.py`, 프롬프트, 템플릿 | 봉인 뷰 공급, sealed plan 작성, publication에 `holdout_start` | B (운영 활성화와 함께) |
+
+봉인 뷰와 private ledger는 개봉 시점까지 보존해야 한다. runner가 세트를 재검증할 때 원래 입력 manifest를 다시 읽기 때문이다.
 
 기존 v1 세트·publication은 재라벨하지 않는다. 새 정책 버전 활성화는 #82와 같은 운영 repin·canary 절차를 따른다.
 

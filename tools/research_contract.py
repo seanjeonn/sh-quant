@@ -159,6 +159,9 @@ def _audit_legacy_ema(public, private):
 
 
 POLICY = {'selection': 'mean_is_sharpe_v1', 'evaluation': 'sharpe_excess_mdd_v1'}
+# #109: a sealed plan reserves dates >= holdout_start; selection/evaluation are unchanged.
+SEALED_POLICY = dict(POLICY, holdout='holdout_forward_v1')
+IS_END = '2022-12-31'
 
 
 import datetime
@@ -288,14 +291,23 @@ def _normalized_signal(signal):
 def validate_plan(plan):
     _require(isinstance(plan, dict))
     _json_finite(plan)
-    _require(plan.get('machine_policy') == POLICY, 'unsupported machine policy')
+    sealed = plan.get('holdout_status') == 'sealed'
+    _require(plan.get('machine_policy') == (SEALED_POLICY if sealed else POLICY), 'unsupported machine policy')
     _require(type(plan.get('schema_version')) is int and plan['schema_version'] == 2)
     sid = plan.get('set_id')
     _require(isinstance(sid, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}_[a-z0-9][a-z0-9_-]*', sid))
     try: datetime.date.fromisoformat(sid[:10])
     except ValueError: raise ContractError('invalid set date') from None
     _require(plan.get('timezone') == 'Asia/Seoul' and plan.get('markets') in (['US', 'KR'], ['KR', 'US']))
-    _require(plan.get('holdout_status') == 'exposed')
+    _require(plan.get('holdout_status') in ('exposed', 'sealed'))
+    if sealed:
+        start = plan.get('holdout_start')
+        _require(isinstance(start, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', start), 'invalid holdout start')
+        try: datetime.date.fromisoformat(start)
+        except ValueError: raise ContractError('invalid holdout start') from None
+        _require(start > IS_END, 'holdout inside in-sample')
+    else:
+        _require('holdout_start' not in plan, 'holdout start requires sealed plan')
     _require(isinstance(plan.get('hypothesis'), str) and plan['hypothesis'].strip())
     next_experiment = plan.get('next_experiment')
     _require(isinstance(next_experiment, dict), 'missing concrete next experiment')
@@ -409,3 +421,20 @@ def evaluate_candidate(plan, entries, selected_run_id):
                     baseline_mean_oos_sharpe=str(base_sharpe), accept=accept, reject=reject)
     return dict(conclusion='accept' if accept else 'reject' if reject else 'defer',
                 criterion=POLICY['evaluation'], criteria_evidence=evidence)
+
+
+def evaluate_holdout(row):
+    """PRIVATE one-shot holdout_forward_v1 judgement (#109): accept or defer only."""
+    _require(isinstance(row, dict) and isinstance(row.get('markets'), dict)
+             and set(row['markets']) == {'US', 'KR'}, 'invalid holdout result')
+    metrics = {}
+    for m in ('US', 'KR'):
+        h = row['markets'][m].get('holdout') if isinstance(row['markets'][m], dict) else None
+        _require(isinstance(h, dict), 'missing holdout metrics')
+        metrics[m] = {k: _number(h.get(k)) for k in ('sharpe', 'excess_cagr')}
+    positive = all(metrics[m]['sharpe'] > 0 for m in ('US', 'KR'))
+    excess = _mean([metrics[m]['excess_cagr'] for m in ('US', 'KR')])
+    accept = positive and excess >= 0
+    return dict(conclusion='accept' if accept else 'defer', criterion=SEALED_POLICY['holdout'],
+                criteria_evidence=dict(holdout_sharpe_positive_both=positive,
+                                       mean_holdout_excess_cagr=str(excess), accept=accept))

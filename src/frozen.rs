@@ -580,6 +580,18 @@ pub(crate) mod tests {
         f.write(manifest);
     }
     #[test]
+    fn sealed_view_provenance_field_is_accepted_and_cutoff_still_enforced() {
+        // #109: tools/holdout.py adds sealed_from_sha256 and lowers cutoff_exclusive.
+        let f = Fixture::new();
+        let mut v = f.populate();
+        v["sealed_from_sha256"] = json!("0".repeat(64));
+        f.write(&v);
+        Frozen::load(&f.manifest()).expect("extra provenance field");
+        v["cutoff_exclusive"] = json!("2023-01-03");
+        f.write(&v);
+        assert!(Frozen::load(&f.manifest()).is_err(), "bar on cutoff must be rejected");
+    }
+    #[test]
     fn schema3_loads_synthetic_alternate_two_market_universe() {
         let f = Fixture::new();
         let (mut manifest, _) = synthetic_schema3(&f);
