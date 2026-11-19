@@ -257,5 +257,42 @@ class ContractTests(unittest.TestCase):
             c.validate_plan(p)
 
 
+def sealed_plan():
+    p = plan()
+    p.update(holdout_status='sealed', holdout_start='2026-12-01',
+             machine_policy=dict(p['machine_policy'], holdout='holdout_forward_v1'))
+    return p
+
+
+class SealedHoldoutTests(unittest.TestCase):
+    """#109: sealed plans reserve a forward window; v1 exposed plans are unchanged."""
+
+    def test_sealed_plan_requires_matching_policy_and_post_is_start(self):
+        c.validate_plan(sealed_plan())
+        c.validate_plan(plan())
+        bad = []
+        for change in (dict(holdout_start=None), dict(holdout_start='2022-12-31'), dict(holdout_start='2026-13-01'),
+                       dict(machine_policy=plan()['machine_policy'])):
+            p = sealed_plan(); p.update(change)
+            if p['holdout_start'] is None: del p['holdout_start']
+            bad.append(p)
+        exposed = plan(); exposed['holdout_start'] = '2026-12-01'; bad.append(exposed)
+        exposed = plan(); exposed['machine_policy'] = sealed_plan()['machine_policy']; bad.append(exposed)
+        for p in bad:
+            with self.subTest(p=p), self.assertRaises(c.ContractError):
+                c.validate_plan(p)
+
+    def test_holdout_forward_v1_accepts_only_positive_sharpe_and_nonnegative_excess(self):
+        def row(us, kr):
+            return dict(id='x', status='ok', markets={m: {'holdout': dict(sharpe=v[0], cagr='0.1', mdd='-0.1', excess_cagr=v[1])}
+                                                       for m, v in (('US', us), ('KR', kr))})
+        self.assertEqual(c.evaluate_holdout(row(('0.5', '0.01'), ('0.2', '-0.005')))['conclusion'], 'accept')
+        self.assertEqual(c.evaluate_holdout(row(('0.5', '0.01'), ('0', '0.02')))['conclusion'], 'defer')
+        self.assertEqual(c.evaluate_holdout(row(('0.5', '-0.03'), ('0.2', '0.01')))['conclusion'], 'defer')
+        self.assertEqual(c.evaluate_holdout(row(('0.5', '0'), ('0.1', '0')))['criterion'], 'holdout_forward_v1')
+        with self.assertRaises(c.ContractError):
+            c.evaluate_holdout(dict(id='x', status='ok', markets={'US': {}, 'KR': {}}))
+
+
 if __name__ == '__main__':
     unittest.main()

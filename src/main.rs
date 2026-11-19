@@ -18,7 +18,7 @@ const USAGE: &str = "usage:
   sh-quant news                                 collect today's headlines
 
 Private offline mode (no network or fallback):
-  sh-quant run strategies/<id>.toml --data-manifest ABS --output-dir ABS
+  sh-quant run strategies/<id>.toml --data-manifest ABS --output-dir ABS [--holdout-start YYYY-MM-DD]
   sh-quant fail strategies/<id>.toml \"<why>\" --output-dir ABS
   sh-quant lesson <id> \"<one line>\" --output-dir ABS
 
@@ -32,7 +32,9 @@ lesson requires an existing private index entry. Writes are locked, fsynced,
 and atomically renamed (index is the commit point). Crash orphans are not reused.
 The stable .writer.lock sidecar may remain after exit. Never unlink it:
 inspect actual kernel-lock ownership, not file existence or cached PIDs.
-Private errors suppress provider content.";
+Private errors suppress provider content.
+--holdout-start H (#109) keeps IS/OOS on dates < H and adds a separate
+holdout split for dates >= H; H must be after the in-sample end.";
 
 #[derive(Deserialize)]
 struct Strategy {
@@ -136,7 +138,7 @@ fn cmd_run(path: &Path) -> Result<()> {
         if data.is_empty() {
             bail!("no data for {m}");
         }
-        let r = backtest::run_market(&sig, &data, m).with_context(|| format!("market {m}"))?;
+        let r = backtest::run_market(&sig, &data, m, None).with_context(|| format!("market {m}"))?;
         markets[m] = serde_json::to_value(&r.metrics)?;
         curves[m] = serde_json::to_value(&r.curve)?;
     }
@@ -169,9 +171,10 @@ fn cmd_lesson(id: &str, text: &str) -> Result<()> {
     save(e, None)
 }
 
-fn cmd_frozen_run(path: &Path, manifest: &Path, output: &Path) -> Result<()> {
+fn cmd_frozen_run(path: &Path, manifest: &Path, output: &Path, holdout: Option<&str>) -> Result<()> {
     // Validate destinations before touching data; lock spans computation and commit.
     frozen::private_path(manifest)?;
+    let holdout = holdout.map(frozen::strict_date).transpose()?;
     let mut store = frozen::Store::open(output)?;
     let id = id_of(path)?;
     store.ensure_new(&id)?;
@@ -181,7 +184,7 @@ fn cmd_frozen_run(path: &Path, manifest: &Path, output: &Path) -> Result<()> {
     input.verify()?;
     let (mut markets, mut curves) = (json!({}), json!({}));
     for m in ["US", "KR"] {
-        let r = backtest::run_market(&sig, &input.market(m), m)?;
+        let r = backtest::run_market(&sig, &input.market(m), m, holdout)?;
         markets[m] = serde_json::to_value(&r.metrics)?;
         curves[m] = serde_json::to_value(&r.curve)?;
     }
@@ -224,7 +227,8 @@ fn validate_cli(a: &[&str]) -> Result<()> {
         ["run", p] => positional(p),
         ["fail" | "lesson", p, text] => positional(p) && !["--data-manifest", "--output-dir"].contains(text),
         ["news"] => true,
-        ["run", p, "--data-manifest", m, "--output-dir", o] => {
+        ["run", p, "--data-manifest", m, "--output-dir", o]
+        | ["run", p, "--data-manifest", m, "--output-dir", o, "--holdout-start", _] => {
             positional(p) && Path::new(m).is_absolute() && Path::new(o).is_absolute()
         }
         ["fail" | "lesson", p, text, "--output-dir", o] => {
@@ -240,7 +244,10 @@ fn dispatch(a: &[&str]) -> Result<()> {
     validate_cli(a)?;
     match a {
         ["run", p, "--data-manifest", manifest, "--output-dir", output] => {
-            cmd_frozen_run(Path::new(p), Path::new(manifest), Path::new(output))
+            cmd_frozen_run(Path::new(p), Path::new(manifest), Path::new(output), None)
+        }
+        ["run", p, "--data-manifest", manifest, "--output-dir", output, "--holdout-start", h] => {
+            cmd_frozen_run(Path::new(p), Path::new(manifest), Path::new(output), Some(h))
         }
         ["fail", p, why, "--output-dir", output] => cmd_private_fail(Path::new(p), why, Path::new(output)),
         ["lesson", id, text, "--output-dir", output] => cmd_private_lesson(id, text, Path::new(output)),
@@ -301,6 +308,9 @@ mod cli_tests {
                 "/out",
             ],
             vec!["fail", "x", "why", "--data-manifest", "/input", "--output-dir", "/out"],
+            vec!["run", "x", "--holdout-start", "2026-12-01"],
+            vec!["run", "x", "--data-manifest", "/input", "--output-dir", "/out", "--holdout-start"],
+            vec!["run", "x", "--holdout-start", "2026-12-01", "--data-manifest", "/input", "--output-dir", "/out"],
         ] {
             assert!(validate_cli(&args).is_err(), "accepted {args:?}");
         }
@@ -310,6 +320,7 @@ mod cli_tests {
             vec!["lesson", "x", "text"],
             vec!["news"],
             vec!["run", "x", "--data-manifest", "/input", "--output-dir", "/out"],
+            vec!["run", "x", "--data-manifest", "/input", "--output-dir", "/out", "--holdout-start", "2026-12-01"],
             vec!["fail", "x", "why", "--output-dir", "/out"],
             vec!["lesson", "x", "text", "--output-dir", "/out"],
         ] {

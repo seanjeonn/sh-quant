@@ -9,7 +9,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-fn strict_date(s: &str) -> Result<chrono::NaiveDate> {
+pub fn strict_date(s: &str) -> Result<chrono::NaiveDate> {
     ensure!(
         s.len() == 10
             && s.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 {
@@ -578,6 +578,18 @@ pub(crate) mod tests {
         fs::write(f.0.join("universe.json"), bytes).unwrap();
         manifest["universe"] = json!({"path":"universe.json","sha256":digest(bytes)});
         f.write(manifest);
+    }
+    #[test]
+    fn sealed_view_provenance_field_is_accepted_and_cutoff_still_enforced() {
+        // #109: tools/holdout.py adds sealed_from_sha256 and lowers cutoff_exclusive.
+        let f = Fixture::new();
+        let mut v = f.populate();
+        v["sealed_from_sha256"] = json!("0".repeat(64));
+        f.write(&v);
+        Frozen::load(&f.manifest()).expect("extra provenance field");
+        v["cutoff_exclusive"] = json!("2023-01-03");
+        f.write(&v);
+        assert!(Frozen::load(&f.manifest()).is_err(), "bar on cutoff must be rejected");
     }
     #[test]
     fn schema3_loads_synthetic_alternate_two_market_universe() {
@@ -1269,8 +1281,8 @@ pub(crate) mod tests {
                     )
                 })
                 .collect();
-            let a = crate::backtest::run_market(&sig, &bars, m).unwrap();
-            let b = crate::backtest::run_market(&sig, &reference, m).unwrap();
+            let a = crate::backtest::run_market(&sig, &bars, m, None).unwrap();
+            let b = crate::backtest::run_market(&sig, &reference, m, None).unwrap();
             assert_eq!(
                 serde_json::to_value(a.metrics).unwrap(),
                 serde_json::to_value(b.metrics).unwrap()

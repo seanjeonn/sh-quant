@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Issue #30: private, offline, incremental research lifecycle.
 
-No acquisition, scheduling, shell execution, Git writes, or sealed holdout.
+No acquisition, scheduling, shell execution, Git writes, or holdout opening
+(sealed plans only reserve the window; tools/holdout.py opens it, #109).
 Every invocation performs at most one trial or lifecycle transition.
 """
 import argparse
@@ -197,6 +198,9 @@ def input_fingerprint(planpath, repo, binary, manifest):
         require(not git(repo, 'diff', '--no-ext-diff', '--no-textconv', plan['engine_commit'], '--', name), 'dirty_engine')
     data = load(manifest)
     require(data.get('status') == 'complete' and isinstance(data.get('entries'), list) and data['entries'], 'incomplete_manifest')
+    if plan['holdout_status'] == 'sealed':
+        cutoff = data.get('cutoff_exclusive')
+        require(isinstance(cutoff, str) and cutoff <= plan['holdout_start'], 'unsealed_input')
     snapshots = {}
     for entry in data['entries']:
         name = entry['path']; rel = Path(name)
@@ -313,7 +317,7 @@ class Runner:
     def descriptor_bytes(self, kind):
         return encode({'schema_version': 2, 'set_id': self.set_id, 'kind': kind,
                        'private_sha256': digest(read(self.folder / (kind + '.json'))),
-                       'holdout_status': 'exposed'})
+                       'holdout_status': self.plan['holdout_status']})
 
     def descriptor(self, kind):
         require(kind in ('plan', 'selection'), 'invalid_descriptor_kind')
@@ -422,7 +426,7 @@ class Runner:
         return dict(selected, plan_sha256=self.config['plan_sha256'],
                     entries_sha256=digest(encode(rows)),
                     attempts_sha256=digest(encode([e for e in self.events if e['event'] in ('start', 'child', 'end')])),
-                    holdout_status='exposed')
+                    holdout_status=self.plan['holdout_status'])
 
     def evaluation_value(self):
         selected = self.selection_value()
@@ -519,7 +523,7 @@ class Runner:
         self.append({'event': name, 'sha256': digest(raw)})
 
     def report_value(self):
-        return {'schema_version': 2, 'set_id': self.set_id, 'holdout_status': 'exposed',
+        return {'schema_version': 2, 'set_id': self.set_id, 'holdout_status': self.plan['holdout_status'],
                 'plan_sha256': self.config['plan_sha256'], 'entries': self.successes(),
                 'selection': self.selection_value(), 'evaluation': self.evaluation_value(),
                 'attempts': [e for e in self.events if e['event'] in ('start', 'child', 'end')],
@@ -548,7 +552,7 @@ class Runner:
                 'is_means': {k: v for k, v in ranking[rid].items() if k != 'run_id'},
                 'metrics_oos': {m: v['oos'] for m, v in row['markets'].items()},
                 'oos_observations': observations})
-        return {'set_id': self.set_id, 'holdout_status': 'exposed',
+        return {'set_id': self.set_id, 'holdout_status': self.plan['holdout_status'],
                 'conclusion': evaluation['conclusion'], 'candidates': candidates,
                 'evaluation': evaluation,
                 'lesson': 'Selection used preregistered IS means only. These private OOS observations are exposed, not independent validation.',

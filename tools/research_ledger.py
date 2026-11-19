@@ -118,6 +118,7 @@ def ledger(root):
     for set_dir in sorted(p for p in (root / "research").iterdir() if p.is_dir()):
         set_id = set_dir.name
         pub = load(set_dir / "publication.json")
+        holdout = load(set_dir / "holdout.public.json") or {}
         if pub is not None:
             source, conclusion, attempts = "schema2", pub.get("conclusion"), pub.get("attempt_count")
             # Structured fields first; the addendum prose is the pre-#81 fallback.
@@ -136,6 +137,10 @@ def ledger(root):
             "grid_position": grid_position(selected, candidates),
             "attempts": attempts if isinstance(attempts, int) else None,
             "backlog_checked": any(f"research/{set_id}/" in l for l in checked),
+            # #109: sealed epoch and one-shot opening outcome (label only).
+            "holdout_status": (pub or {}).get("holdout_status") or "exposed",
+            "holdout_start": (pub or {}).get("holdout_start") or holdout.get("holdout_start"),
+            "holdout_conclusion": holdout.get("conclusion"),
         })
 
     def counts(key, rows):
@@ -159,6 +164,16 @@ def ledger(root):
                 for f in families},
             "cumulative_attempts": sum(s["attempts"] or 0 for s in sets),
             "sets_with_unknown_attempts": sum(s["attempts"] is None for s in sets),
+            "holdout_epochs": {
+                start: {
+                    "sealed_sets": len(rows),
+                    "attempts": sum(s["attempts"] or 0 for s in rows),
+                    "openings": sum(s["holdout_conclusion"] is not None for s in rows),
+                    "opening_conclusions": counts(
+                        "holdout_conclusion", [s for s in rows if s["holdout_conclusion"] is not None]),
+                }
+                for start in sorted({s["holdout_start"] for s in sets if s["holdout_start"]})
+                for rows in [[s for s in sets if s["holdout_start"] == start]]},
         },
     }
 

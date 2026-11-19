@@ -108,6 +108,28 @@ class ResearchLedger(unittest.TestCase):
             s = json.loads(run(root))["sets"][0]
         self.assertEqual((s["selected_candidate"], s["candidate_count"], s["grid_position"]), ("v002", 3, "edge"))
 
+    def test_holdout_epochs_count_sealed_sets_and_openings(self):
+        # #109: per-epoch trial accounting and one-shot opening outcomes.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for sid, pub, opened in (
+                    ("2026-12-02_ema_a", {"conclusion": "accept", "attempt_count": 3,
+                                          "holdout_status": "sealed", "holdout_start": "2026-12-01"}, "defer"),
+                    ("2026-12-03_rsi_b", {"conclusion": "reject", "attempt_count": 4,
+                                          "holdout_status": "sealed", "holdout_start": "2026-12-01"}, None),
+                    ("2026-11-20_macd_c", {"conclusion": "defer", "attempt_count": 3}, None)):
+                d = root / "research" / sid; d.mkdir(parents=True)
+                (d / "publication.json").write_text(json.dumps(pub))
+                if opened:
+                    (d / "holdout.public.json").write_text(json.dumps(
+                        {"holdout_start": "2026-12-01", "conclusion": opened}))
+            data = json.loads(run(root))
+        by_id = {s["set_id"]: s for s in data["sets"]}
+        self.assertEqual(by_id["2026-11-20_macd_c"]["holdout_status"], "exposed")
+        self.assertEqual(by_id["2026-12-02_ema_a"]["holdout_conclusion"], "defer")
+        self.assertEqual(data["aggregates"]["holdout_epochs"], {"2026-12-01": {
+            "sealed_sets": 2, "attempts": 7, "openings": 1, "opening_conclusions": {"defer": 1}}})
+
 
 if __name__ == "__main__":
     unittest.main()
