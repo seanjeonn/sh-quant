@@ -4,119 +4,263 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>sh-quant 전략 기록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root{--bg:#fafaf9;--fg:#1c1917;--mute:#78716c;--line:#e7e5e4;--card:#fff;--acc:#2563eb;--pos:#15803d;--neg:#b91c1c}
-@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--fg:#e7e5e4;--mute:#a8a29e;--line:#292524;--card:#1c1917;--acc:#60a5fa;--pos:#4ade80;--neg:#f87171}}
+:root{--bg:#F5F6F8;--card:#FFFFFF;--line:#E3E6EB;--line2:#EEF0F3;--fg:#111827;--fg2:#3D4552;--mute:#5A6372;--soft:#EEF1F5;--acc:#2F5BEA;--accbg:#F1F5FF;--neg:#C2410C;--bh:#8A93A3}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1116;--card:#161A21;--line:#2A303A;--line2:#222730;--fg:#E8EBF0;--fg2:#C3C9D3;--mute:#9AA3B2;--soft:#222833;--acc:#7C9BFF;--accbg:#1A2236;--neg:#FB923C;--bh:#7D8696}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,system-ui,"Apple SD Gothic Neo",sans-serif}
-main{max-width:1100px;margin:0 auto;padding:24px 16px}
-h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:28px 0 8px}
-.sub{color:var(--mute);margin:0 0 16px}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-button,select{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 12px;cursor:pointer}
-button[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
-.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-table{border-collapse:collapse;width:100%;white-space:nowrap}
-th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
-th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
-th{color:var(--mute);font-weight:500;font-size:12px;cursor:pointer;user-select:none}
-tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:color-mix(in srgb,var(--acc) 8%,transparent)}
-.pos{color:var(--pos)}.neg{color:var(--neg)}.mute{color:var(--mute)}
-.tag{display:inline-block;font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-right:3px}
-#detail{display:none;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-#detail p{margin:4px 0}
-.chartbox{position:relative;height:300px;margin-top:12px}
-ol{padding-left:20px}li{margin:4px 0}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,"Noto Sans KR",-apple-system,system-ui,sans-serif}
+a{color:var(--acc)}
+button{font:inherit;color:inherit;cursor:pointer}
+.num{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.lbl{font-size:12px;color:var(--mute);font-weight:500}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px}
+.neg{color:var(--neg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+header{background:var(--card);border-bottom:1px solid var(--line)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+.top{min-height:60px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.seg{display:flex;padding:3px;border-radius:9px;background:var(--soft);margin-left:auto}
+.seg button{min-height:36px;padding:0 14px;border:0;border-radius:7px;background:transparent;color:var(--mute);font-weight:500}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.08)}
+main{padding-top:28px;padding-bottom:64px;display:flex;flex-direction:column;gap:24px}
+h1{margin:0;font-size:26px;letter-spacing:-.01em}h2{margin:0;font-size:16px;font-weight:600}h3{margin:0;font-size:14px;font-weight:600}
+.sub{margin:6px 0 0;color:var(--mute);max-width:760px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kpi{padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.kpi .num{font-size:28px;font-weight:600}
+.bar{padding:14px 18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-bottom:1px solid var(--line)}
+.search{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;margin-left:auto;min-width:220px}
+.search input{font:inherit;border:0;outline:none;background:transparent;color:var(--fg);flex:1;min-width:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg2);font-size:13px}
+.chips button[aria-pressed=true]{background:var(--fg);border-color:var(--fg);color:var(--card);font-weight:600}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;white-space:nowrap;font-size:13px}
+th{font-size:12px;font-weight:500;color:var(--mute);text-align:right;padding:0 12px;height:40px;border-bottom:1px solid var(--line);background:var(--soft)}
+th button{border:0;background:none;color:inherit;font-weight:inherit;padding:0;height:40px}
+td{padding:12px;text-align:right;border-bottom:1px solid var(--line2)}
+.l{text-align:left}
+#rows tr[data-id]{cursor:pointer}
+#rows tr[data-id]:hover{background:var(--accbg)}
+#rows tr.sel{background:var(--accbg);box-shadow:inset 3px 0 0 var(--acc)}
+.name{border:0;background:none;padding:0;font-weight:600;text-align:left}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:var(--soft);color:var(--fg2);font-size:12px;font-weight:500;margin:4px 4px 0 0}
+.tag.ok{background:var(--accbg);color:var(--acc)}.tag.fail{color:var(--neg)}
+.meter{display:inline-block;width:64px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;vertical-align:middle;margin-right:8px}
+.meter i{display:block;height:6px;background:var(--acc)}
+.empty{padding:20px 12px;color:var(--mute);text-align:left}
+.ts-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+.ts-head h2{font-size:20px;font-weight:700}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);text-decoration:none;font-weight:500;margin-left:auto}
+.split{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.chartcard{flex:999 1 560px;min-width:0;padding:18px;display:flex;flex-direction:column;gap:10px}
+.side{flex:1 1 340px;min-width:0;padding:18px;display:flex;flex-direction:column;gap:14px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:16px;height:0;border-top:2px solid var(--acc)}.sw.bh{border-top:2px dashed var(--bh)}.sw.oos{width:12px;height:12px;border:0;border-radius:3px;background:var(--soft)}
+.side td,.side th{background:none;padding:9px 0 9px 12px}.side td:first-child,.side th:first-child{padding-left:0;text-align:left}
+.side tr:last-child td{border-bottom:0}
+.side p{margin:0}
+.timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.timeline li{display:grid;grid-template-columns:96px 12px minmax(0,1fr);gap:12px}
+.dot{width:10px;height:10px;border-radius:5px;background:var(--acc);margin-top:6px}.dot.fail{background:var(--neg)}
+@media (max-width:640px){h1{font-size:22px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.kpi{padding:12px}.kpi .num{font-size:22px}.top{padding-bottom:8px}.search{margin-left:0;width:100%}.timeline li{grid-template-columns:12px minmax(0,1fr)}.timeline li>.lbl{display:none}}
 </style>
 </head>
 <body>
-<main>
-<h1>sh-quant 전략 기록</h1>
-<p class="sub">매일 하나씩 새 전략을 백테스트합니다. 순위는 OOS(2023~) Sharpe 기준, 수익은 동일가중 유니버스, 비교 대상은 동일가중 Buy&amp;Hold.</p>
-<div class="bar" id="markets"></div>
-<div class="bar"><label>태그 <select id="tag"><option value="">전체</option></select></label></div>
-<div class="wrap"><table>
-<thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
-<section id="detail">
-<strong id="d-name"></strong> <a id="d-code" target="_blank" rel="noopener">코드</a>
-<p><span class="mute">가설</span> <span id="d-hyp"></span></p>
-<p><span class="mute">교훈</span> <span id="d-lesson"></span></p>
-<div class="chartbox"><canvas id="chart" aria-label="누적 수익 곡선"></canvas></div>
-</section>
-<h2>타임라인</h2>
-<ol id="timeline" reversed></ol>
+<header><div class="wrap top">
+  <div class="brand"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="1" width="20" height="20" rx="5" fill="currentColor"/><path d="M5 15 L9 10 L12 13 L17 6" stroke="var(--card)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>sh-quant</div>
+  <div class="seg" role="group" aria-label="시장 선택" id="markets"></div>
+  <span class="lbl" id="asof"></span>
+</div></header>
+<main class="wrap">
+  <section>
+    <h1>전략 연구 기록</h1>
+    <p class="sub">매일 하나의 전략 연구 세트를 검증합니다. 순위는 OOS(2023~) Sharpe 기준이며, 수익은 동일가중 유니버스, 비교 대상은 동일가중 Buy&amp;Hold입니다.</p>
+  </section>
+  <section class="kpis" aria-label="요약 지표" id="kpis"></section>
+  <section class="card" aria-labelledby="lb-title" style="overflow:hidden">
+    <div class="bar">
+      <h2 id="lb-title">순위표</h2>
+      <label class="search"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M11 11 L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="sr">전략 검색</span><input type="search" id="q" placeholder="전략·가설 검색"></label>
+      <div class="chips" role="group" aria-label="태그 필터" id="tags"></div>
+    </div>
+    <div class="scroll"><table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+  <section id="detail" aria-labelledby="d-name" hidden>
+    <div class="ts-head">
+      <h2 id="d-name"></h2><span class="lbl" id="d-meta"></span>
+      <a class="btn" id="d-code" target="_blank" rel="noopener">전략 코드 (.toml)</a>
+    </div>
+    <div class="split">
+      <div class="card chartcard">
+        <div class="legend lbl"><h3>누적 수익 (로그)</h3><span><i class="sw"></i><b id="l-s"></b></span><span><i class="sw bh"></i><b id="l-b"></b></span><span><i class="sw oos"></i>OOS 2023~</span></div>
+        <div style="position:relative;height:280px"><canvas id="chart" role="img" aria-label="전략과 Buy&amp;Hold 누적 수익 곡선"></canvas></div>
+        <h3>낙폭 (Underwater)</h3>
+        <div style="position:relative;height:110px"><canvas id="dd" role="img" aria-label="전략 낙폭 곡선"></canvas></div>
+      </div>
+      <div class="card side">
+        <h3>성과 지표</h3>
+        <table><thead><tr><th>지표</th><th>IS ~2022</th><th style="color:var(--fg)">OOS 2023~</th></tr></thead><tbody id="metrics"></tbody></table>
+        <div><span class="lbl">가설</span><p id="d-hyp"></p></div>
+        <div><span class="lbl">교훈</span><p id="d-lesson"></p></div>
+      </div>
+    </div>
+  </section>
+  <section class="card" aria-labelledby="tl-title" style="padding:18px;display:flex;flex-direction:column;gap:14px">
+    <h2 id="tl-title">연구 기록</h2>
+    <ol class="timeline" id="timeline"></ol>
+  </section>
 </main>
 <script>
 const REPO = "https://github.com/seanjeonn/sh-quant/blob/main/strategies/";
+const OOS_FROM = "2023-01-01"; // backtest.rs is_end() = 2022-12-31
+// [key, label, sortable, align-left]
 const COLS = [
-  ["date","날짜"],["name","전략"],["tags","태그"],
-  ["oos.sharpe","OOS Sharpe"],["oos.cagr","OOS CAGR"],["oos.excess_cagr","OOS 초과"],["oos.mdd","OOS MDD"],
-  ["is.sharpe","IS Sharpe"],["is.cagr","IS CAGR"],["oos.exposure","노출"],
+  ["rank","#",0,1],["name","전략",1,1],["spark","OOS 추이",0,1],
+  ["oos.sharpe","OOS Sharpe",1],["oos.cagr","OOS CAGR",1],["oos.excess_cagr","B&H 대비",1],["oos.mdd","OOS MDD",1],
+  ["is.sharpe","IS Sharpe",1],["oos.exposure","노출",1],["date","등록일",1,1],
 ];
-const PCT = new Set(["oos.cagr","oos.excess_cagr","oos.mdd","is.cagr","oos.exposure"]);
-let all = [], market = "US", sortKey = "oos.sharpe", desc = true, chart, selId;
-
+const METRICS = [["cagr","CAGR"],["bh_cagr","B&H CAGR"],["excess_cagr","초과 CAGR"],["sharpe","Sharpe"],["mdd","MDD"],["win_rate","승률"],["exposure","노출"],["total","누적 수익"]];
+let all = [], curves = {}, market = "US", sortKey = "oos.sharpe", desc = true, tag = "", chart, ddChart, selId;
+const $ = id => document.getElementById(id);
 const get = (e, k) => k.includes(".") ? e.markets?.[market]?.[k.split(".")[0]]?.[k.split(".")[1]] : e[k];
-const fmt = (k, v) => v == null ? "–" : PCT.has(k) ? (v*100).toFixed(1)+"%" : typeof v === "number" ? v.toFixed(2) : v;
-const cls = (k, v) => typeof v !== "number" || k.endsWith("exposure") ? "" : k.endsWith("mdd") ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const minus = s => s.replace("-", "−");
+const fmt = (k, v) => {
+  if (v == null) return "–";
+  const f = k.split(".").pop();
+  if (f === "sharpe") return minus(v.toFixed(2));
+  if (f === "excess_cagr") return minus((v > 0 ? "+" : "") + (v*100).toFixed(1) + "%p");
+  if (f === "total") return minus((v > 0 ? "+" : "") + (v*100).toFixed(1) + "%");
+  return typeof v === "number" ? minus((v*100).toFixed(1) + "%") : v;
+};
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ok = () => all.filter(e => e.status === "ok" && e.markets?.[market]);
 
-function render() {
-  document.getElementById("markets").innerHTML = ["US","KR"].map(m =>
-    `<button aria-pressed="${m===market}" data-m="${m}">${m === "US" ? "미국" : "한국"}</button>`).join("");
-  document.getElementById("head").innerHTML = COLS.map(([k,l]) =>
-    `<th data-k="${k}">${l}${k===sortKey ? (desc?" ↓":" ↑") : ""}</th>`).join("");
-  const tag = document.getElementById("tag").value;
-  const rows = all.filter(e => e.status === "ok" && (!tag || e.tags.includes(tag)))
-    .sort((a,b) => ((get(a,sortKey) ?? -1e9) > (get(b,sortKey) ?? -1e9) ? 1 : -1) * (desc ? -1 : 1));
-  document.getElementById("rows").innerHTML = rows.map(e => `<tr data-id="${esc(e.id)}" class="${e.id===selId?"sel":""}">` +
-    COLS.map(([k]) => k === "tags" ? `<td>${e.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join("")}</td>`
-      : `<td class="${cls(k,get(e,k))}">${esc(fmt(k,get(e,k)))}</td>`).join("") + "</tr>").join("")
-    || `<tr><td colspan="${COLS.length}" class="mute">기록 없음</td></tr>`;
-  document.getElementById("timeline").innerHTML = [...all].reverse().map(e =>
-    `<li><span class="mute">${esc(e.date)}</span> ${esc(e.name)} ${e.status === "failed"
-      ? `<span class="neg">실패: ${esc(e.error)}</span>` : `<span class="mute">— ${esc(e.lesson ?? "교훈 미기록")}</span>`}</li>`).join("");
-  if (selId) showDetail(selId);
+function spark(id) {
+  const c = curves[id]?.[market]; if (!c) return "";
+  const i0 = c.dates.findIndex(d => d >= OOS_FROM), s = c.strategy.slice(i0 < 0 ? 0 : i0);
+  if (s.length < 2) return "";
+  const lo = Math.min(...s), hi = Math.max(...s), r = hi - lo || 1;
+  const pts = s.map((v, i) => `${(i*96/(s.length-1)).toFixed(1)},${(26-(v-lo)/r*24).toFixed(1)}`).join(" ");
+  return `<svg width="96" height="28" viewBox="0 0 96 28" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--acc)" stroke-width="1.5"/></svg>`;
 }
 
-async function showDetail(id) {
-  selId = id;
-  const e = all.find(x => x.id === id);
-  const d = document.getElementById("detail");
-  d.style.display = "block";
-  document.getElementById("d-name").textContent = e.name;
-  document.getElementById("d-hyp").textContent = e.hypothesis;
-  document.getElementById("d-lesson").textContent = e.lesson ?? "–";
-  document.getElementById("d-code").href = REPO + id + ".toml";
-  const c = (await (await fetch(`results/${id}.json`)).json()).curves[market];
-  const css = getComputedStyle(document.documentElement);
-  chart?.destroy();
-  chart = new Chart(document.getElementById("chart"), {
-    type: "line",
+function kpi(label, value, note, cls = "") {
+  return `<div class="card kpi"><span class="lbl">${label}</span><span class="num ${cls}">${value}</span><span class="lbl">${esc(note)}</span></div>`;
+}
+
+function render() {
+  $("markets").innerHTML = [["US","미국 US"],["KR","한국 KR"]].map(([m,l]) => `<button type="button" aria-pressed="${m===market}" data-m="${m}">${l}</button>`).join("");
+  const rowsAll = ok(), failed = all.filter(e => e.status === "failed").length;
+  const best = [...rowsAll].sort((a,b) => (get(b,"oos.sharpe") ?? -1e9) - (get(a,"oos.sharpe") ?? -1e9))[0];
+  const bestEx = [...rowsAll].sort((a,b) => (get(b,"oos.excess_cagr") ?? -1e9) - (get(a,"oos.excess_cagr") ?? -1e9))[0];
+  const beat = rowsAll.filter(e => get(e,"oos.excess_cagr") > 0).length;
+  const exV = bestEx ? get(bestEx,"oos.excess_cagr") : null;
+  $("kpis").innerHTML = kpi("공개된 전략", rowsAll.length, `실패 ${failed}`)
+    + kpi("최고 OOS Sharpe", best ? fmt("oos.sharpe", get(best,"oos.sharpe")) : "–", best?.name ?? "")
+    + kpi("B&amp;H 대비 OOS 초과 CAGR (최고)", fmt("oos.excess_cagr", exV), `B&H를 이긴 전략 ${beat} / ${rowsAll.length}`, exV < 0 ? "neg" : "")
+    + kpi("OOS 최대낙폭 (최고 Sharpe 전략)", best ? fmt("oos.mdd", get(best,"oos.mdd")) : "–", best?.name ?? "");
+
+  const tags = [...new Set(all.flatMap(e => e.tags ?? []))].sort();
+  $("tags").innerHTML = ["", ...tags].map(t => `<button type="button" aria-pressed="${t===tag}" data-t="${esc(t)}">${t ? esc(t) : "전체"}</button>`).join("");
+  $("head").innerHTML = COLS.map(([k,l,s,left]) => {
+    const arrow = k === sortKey ? (desc ? " ↓" : " ↑") : "";
+    const sort = k === sortKey ? (desc ? "descending" : "ascending") : "none";
+    return `<th class="${left ? "l" : ""}" ${s ? `aria-sort="${sort}"` : ""}>${s ? `<button type="button" data-k="${k}">${esc(l)}${arrow}</button>` : esc(l)}</th>`;
+  }).join("");
+
+  const q = $("q").value.trim().toLowerCase();
+  const maxSharpe = Math.max(0, ...rowsAll.map(e => get(e,"oos.sharpe") ?? 0)) || 1;
+  const rows = rowsAll.filter(e => (!tag || e.tags.includes(tag)) && (!q || `${e.name} ${e.hypothesis}`.toLowerCase().includes(q)))
+    .sort((a,b) => ((get(a,sortKey) ?? -1e9) > (get(b,sortKey) ?? -1e9) ? 1 : -1) * (desc ? -1 : 1));
+  if (!selId && rows[0]) selId = rows[0].id;
+  $("rows").innerHTML = rows.map((e, i) => {
+    const cell = k => {
+      const v = get(e, k);
+      if (k === "oos.sharpe") return `<td class="num"><span class="meter"><i style="width:${Math.max(0, (v ?? 0)/maxSharpe*100).toFixed(0)}%"></i></span><b>${fmt(k,v)}</b></td>`;
+      if (k === "date") return `<td class="num l lbl">${esc(v)}</td>`;
+      return `<td class="num ${k.endsWith("excess_cagr") && v < 0 ? "neg" : ""}">${fmt(k,v)}</td>`;
+    };
+    return `<tr data-id="${esc(e.id)}" class="${e.id===selId ? "sel" : ""}">`
+      + `<td class="num l lbl">${i+1}</td>`
+      + `<td class="l"><button type="button" class="name" data-id="${esc(e.id)}">${esc(e.name)}</button><br>${e.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</td>`
+      + `<td class="l">${spark(e.id)}</td>`
+      + COLS.slice(3).map(([k]) => cell(k)).join("") + "</tr>";
+  }).join("") + `<tr><td colspan="${COLS.length}" class="empty">${rows.length ? "다음 연구 세트가 completed로 결론나면 여기에 순위가 추가됩니다." : "조건에 맞는 전략이 없습니다."}</td></tr>`;
+
+  $("timeline").innerHTML = [...all].reverse().map(e => {
+    const f = e.status === "failed";
+    return `<li><span class="num lbl">${esc(e.date)}</span><span class="dot ${f ? "fail" : ""}"></span><div><b>${esc(e.name)}</b> <span class="tag ${f ? "fail" : "ok"}">${f ? "실패" : "완료"}</span><br><span class="lbl">${esc(f ? e.error : (e.lesson ?? "교훈 미기록"))}</span></div></li>`;
+  }).join("") || `<li class="lbl">기록 없음</li>`;
+  showDetail();
+}
+
+function showDetail() {
+  const e = all.find(x => x.id === selId), c = curves[selId]?.[market], m = e?.markets?.[market];
+  $("detail").hidden = !(e && c && m);
+  if ($("detail").hidden) return;
+  $("d-name").textContent = e.name;
+  $("d-meta").textContent = `${e.source ?? ""} · ${e.date} · ${market === "US" ? "미국" : "한국"} 동일가중 유니버스`;
+  $("d-code").href = REPO + e.id + ".toml";
+  $("d-hyp").textContent = e.hypothesis;
+  $("d-lesson").textContent = e.lesson ?? "아직 기록되지 않았습니다.";
+  $("l-s").textContent = `전략 ×${c.strategy.at(-1).toFixed(2)}`;
+  $("l-b").textContent = `Buy&Hold ×${c.buy_hold.at(-1).toFixed(2)}`;
+  $("metrics").innerHTML = METRICS.map(([k,l]) => {
+    const neg = v => k === "excess_cagr" && v < 0 ? "neg" : "";
+    return `<tr><td>${l}</td><td class="num ${neg(m.is?.[k])}">${fmt(k, m.is?.[k])}</td><td class="num ${neg(m.oos?.[k])}"><b>${fmt(k, m.oos?.[k])}</b></td></tr>`;
+  }).join("");
+
+  let peak = 0;
+  const dd = c.strategy.map(v => (peak = Math.max(peak, v), v / peak - 1));
+  const oosIdx = c.dates.findIndex(d => d >= OOS_FROM);
+  const shade = { id: "oos", beforeDatasetsDraw(ch) {
+    if (oosIdx < 0) return;
+    const { ctx, chartArea: a, scales: { x } } = ch, x0 = x.getPixelForValue(oosIdx);
+    ctx.save(); ctx.fillStyle = css("--soft"); ctx.fillRect(x0, a.top, a.right - x0, a.bottom - a.top); ctx.restore();
+  }};
+  const grid = { color: css("--line2") }, tick = { color: css("--mute"), font: { family: "JetBrains Mono", size: 11 } };
+  const base = { maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { display: false } } };
+  chart?.destroy(); ddChart?.destroy();
+  chart = new Chart($("chart"), { type: "line", plugins: [shade],
     data: { labels: c.dates, datasets: [
-      { label: e.name, data: c.strategy, borderColor: css.getPropertyValue("--acc"), borderWidth: 2, pointRadius: 0 },
-      { label: "Buy & Hold", data: c.buy_hold, borderColor: css.getPropertyValue("--mute"), borderWidth: 1.5, pointRadius: 0 },
+      { label: e.name, data: c.strategy, borderColor: css("--acc"), borderWidth: 2, pointRadius: 0 },
+      { label: "Buy & Hold", data: c.buy_hold, borderColor: css("--bh"), borderWidth: 1.5, borderDash: [4, 3], pointRadius: 0 },
     ]},
-    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-      scales: { x: { ticks: { maxTicksLimit: 8, color: css.getPropertyValue("--mute") } },
-                y: { type: "logarithmic", ticks: { color: css.getPropertyValue("--mute") } } },
-      plugins: { legend: { labels: { color: css.getPropertyValue("--fg") } } } },
+    options: { ...base, scales: { x: { ticks: { ...tick, maxTicksLimit: 8, maxRotation: 0, callback: v => c.dates[v].slice(0, 4) }, grid: { display: false } },
+      y: { type: "logarithmic", grid, ticks: { ...tick, callback: v => [1,2,4,8,16,32].includes(v) ? v + "×" : "" } } } },
+  });
+  ddChart = new Chart($("dd"), { type: "line", plugins: [shade],
+    data: { labels: c.dates, datasets: [{ label: "낙폭", data: dd, borderColor: css("--neg"), backgroundColor: css("--neg") + "47", fill: "origin", borderWidth: 1, pointRadius: 0 }] },
+    options: { ...base, scales: { x: { display: false }, y: { max: 0, grid, ticks: { ...tick, maxTicksLimit: 3, callback: v => minus((v*100).toFixed(0) + "%") } } },
+      plugins: { ...base.plugins, tooltip: { callbacks: { label: t => minus((t.raw*100).toFixed(1) + "%") } } } },
   });
 }
 
 document.addEventListener("click", ev => {
-  const m = ev.target.closest("[data-m]"), th = ev.target.closest("th[data-k]"), tr = ev.target.closest("tr[data-id]");
-  if (m) { market = m.dataset.m; render(); }
-  else if (th) { const k = th.dataset.k; desc = k === sortKey ? !desc : true; sortKey = k; render(); }
-  else if (tr) { selId = tr.dataset.id; render(); }
+  const t = ev.target, m = t.closest("[data-m]"), th = t.closest("th [data-k]"), tg = t.closest("[data-t]"), tr = t.closest("tr[data-id]");
+  if (m) market = m.dataset.m;
+  else if (th) { const k = th.dataset.k; desc = k === sortKey ? !desc : true; sortKey = k; }
+  else if (tg) tag = tg.dataset.t;
+  else if (tr) selId = tr.dataset.id;
+  else return;
+  render();
 });
-document.getElementById("tag").addEventListener("change", render);
+$("q").addEventListener("input", render);
 
-fetch("results/index.json", { cache: "no-store" }).then(r => r.json()).then(idx => {
+fetch("results/index.json", { cache: "no-store" }).then(r => r.json()).then(async idx => {
   all = idx;
-  const tags = [...new Set(idx.flatMap(e => e.tags))].sort();
-  document.getElementById("tag").innerHTML += tags.map(t => `<option>${esc(t)}</option>`).join("");
+  const last = idx.map(e => e.date).sort().at(-1);
+  $("asof").innerHTML = last ? `최근 등록 <span class="num">${esc(last)}</span>` : "";
+  // ponytail: loads every curve file up front for sparklines; lazy-load if the results count gets large.
+  await Promise.all(idx.filter(e => e.status === "ok").map(e =>
+    fetch(`results/${e.id}.json`).then(r => r.json()).then(d => { curves[e.id] = d.curves; }).catch(() => {})));
   render();
 });
 </script>
