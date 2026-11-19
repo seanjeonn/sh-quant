@@ -8,8 +8,8 @@
 - [x] 볼린저밴드(20, 2σ) 하단 이탈 매수, 중심선 회귀 시 청산 — [2026-11-13 세트](research/2026-11-13_bollinger_reversion/publication.json), 완료·defer; IS 선택은2.5σ 변형, 채택 아님. [정성 기록](research/2026-11-13_bollinger_reversion/research-addendum.md), #53 / PR #55. 후속12-1 모멘텀 #54.
 - [x] 12-1 모멘텀: 12개월 수익률(최근 1개월 제외) > 0 일 때만 보유 — [2026-11-14 세트](research/2026-11-14_momentum_12_1/publication.json), 완료·reject; IS 선택은231일 변형(최근21일 제외), 채택 아님. [정성 기록](research/2026-11-14_momentum_12_1/research-addendum.md), #65 / PR #67. 후속 돈치안 #66.
 - [x] 돈치안 55일 고가 돌파 매수, 20일 저가 이탈 청산 (터틀 변형) — [2026-11-15 세트](research/2026-11-15_donchian_breakout/publication.json), 완료·defer; IS 선택은70일 진입창, 채택 아님. [정성 기록](research/2026-11-15_donchian_breakout/research-addendum.md), #68 / PR #70. 후속 MACD #69.
-- [ ] MACD(12,26,9) 시그널선 상향 돌파
+- [x] MACD(12,26,9) 시그널선 상향 돌파 — [2026-11-16 세트](research/2026-11-16_macd_smoothing/publication.json), 완료·reject; [정성 기록](research/2026-11-16_macd_smoothing/research-addendum.md).
 - [ ] 변동성 타기팅: 20일 실현변동성 역수로 포지션 크기 조절 (목표 연 15%)
-- [ ] 200일선 위 + RSI(2) < 10 눌림목 매수
+- [x] 200일선 위 + RSI(2) < 10 눌림목 매수 — [2026-11-18 세트](research/2026-11-18_rsi2_pullback/publication.json), 완료·defer; [정성 기록](research/2026-11-18_rsi2_pullback/research-addendum.md).
 - [ ] 거래량 급증(20일 평균의 2배) + 양봉 다음날 진입, 5일 보유
 - [ ] 52주 신고가 근접(95% 이상)일 때만 보유
