@@ -1,0 +1,1917 @@
+{
+ "schema_version": 1,
+ "universe_id": "thematic_v1",
+ "universe_sha256": "140b31ef0309503a1d7e418059f3d82cc5ac39476eaf8269cb68db9a3f6d8e86",
+ "source": "GDELT GKG 2.1 V1Organizations (column 13), exact lowercase match. Data: The GDELT Project, https://www.gdeltproject.org/",
+ "created": "2026-11-19",
+ "policy": [
+  "Single-name equities only; ETFs and index funds have coverage none (no company news mapping).",
+  "Each base is an English corporate name (current or former) as GDELT writes it; it is expanded with suffixes: '', ' co', ' co ltd', ' corp', ' corporation', ' inc', ' company', ' ltd', ' limited', ' llc', ' plc', ' holdings'.",
+  "Bases that are common words or platforms on their own (apple, amazon, google, alphabet, facebook, kia, hmm) match only with a suffix.",
+  "Group-level names (samsung, hyundai, hanwha, doosan, sk, lg alone or \"... group\") are excluded because they do not identify one listed company.",
+  "until (exclusive) bounds a former name that later refers to a different entity.",
+  "Derived from organization-name frequencies in a 2024-01-08..14 sample plus known former names; no prices or strategy results were inspected."
+ ],
+ "instruments": [
+  {
+   "market": "US",
+   "ticker": "SPY",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "QQQ",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "AAPL",
+   "coverage": "orgs",
+   "aliases": [
+    "apple co",
+    "apple co ltd",
+    "apple corp",
+    "apple corporation",
+    "apple inc",
+    "apple company",
+    "apple ltd",
+    "apple limited",
+    "apple llc",
+    "apple plc",
+    "apple holdings",
+    "apple computer co",
+    "apple computer co ltd",
+    "apple computer corp",
+    "apple computer corporation",
+    "apple computer inc",
+    "apple computer company",
+    "apple computer ltd",
+    "apple computer limited",
+    "apple computer llc",
+    "apple computer plc",
+    "apple computer holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "MSFT",
+   "coverage": "orgs",
+   "aliases": [
+    "microsoft",
+    "microsoft co",
+    "microsoft co ltd",
+    "microsoft corp",
+    "microsoft corporation",
+    "microsoft inc",
+    "microsoft company",
+    "microsoft ltd",
+    "microsoft limited",
+    "microsoft llc",
+    "microsoft plc",
+    "microsoft holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "NVDA",
+   "coverage": "orgs",
+   "aliases": [
+    "nvidia",
+    "nvidia co",
+    "nvidia co ltd",
+    "nvidia corp",
+    "nvidia corporation",
+    "nvidia inc",
+    "nvidia company",
+    "nvidia ltd",
+    "nvidia limited",
+    "nvidia llc",
+    "nvidia plc",
+    "nvidia holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "AMZN",
+   "coverage": "orgs",
+   "aliases": [
+    "amazon co",
+    "amazon co ltd",
+    "amazon corp",
+    "amazon corporation",
+    "amazon inc",
+    "amazon company",
+    "amazon ltd",
+    "amazon limited",
+    "amazon llc",
+    "amazon plc",
+    "amazon holdings",
+    "amazon com",
+    "amazon com co",
+    "amazon com co ltd",
+    "amazon com corp",
+    "amazon com corporation",
+    "amazon com inc",
+    "amazon com company",
+    "amazon com ltd",
+    "amazon com limited",
+    "amazon com llc",
+    "amazon com plc",
+    "amazon com holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "GOOGL",
+   "coverage": "orgs",
+   "aliases": [
+    "google co",
+    "google co ltd",
+    "google corp",
+    "google corporation",
+    "google inc",
+    "google company",
+    "google ltd",
+    "google limited",
+    "google llc",
+    "google plc",
+    "google holdings",
+    "alphabet co",
+    "alphabet co ltd",
+    "alphabet corp",
+    "alphabet corporation",
+    "alphabet inc",
+    "alphabet company",
+    "alphabet ltd",
+    "alphabet limited",
+    "alphabet llc",
+    "alphabet plc",
+    "alphabet holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "META",
+   "coverage": "orgs",
+   "aliases": [
+    "facebook co",
+    "facebook co ltd",
+    "facebook corp",
+    "facebook corporation",
+    "facebook inc",
+    "facebook company",
+    "facebook ltd",
+    "facebook limited",
+    "facebook llc",
+    "facebook plc",
+    "facebook holdings",
+    "meta platforms",
+    "meta platforms co",
+    "meta platforms co ltd",
+    "meta platforms corp",
+    "meta platforms corporation",
+    "meta platforms inc",
+    "meta platforms company",
+    "meta platforms ltd",
+    "meta platforms limited",
+    "meta platforms llc",
+    "meta platforms plc",
+    "meta platforms holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "JPM",
+   "coverage": "orgs",
+   "aliases": [
+    "jpmorgan chase",
+    "jpmorgan chase co",
+    "jpmorgan chase co ltd",
+    "jpmorgan chase corp",
+    "jpmorgan chase corporation",
+    "jpmorgan chase inc",
+    "jpmorgan chase company",
+    "jpmorgan chase ltd",
+    "jpmorgan chase limited",
+    "jpmorgan chase llc",
+    "jpmorgan chase plc",
+    "jpmorgan chase holdings",
+    "jp morgan chase",
+    "jp morgan chase co",
+    "jp morgan chase co ltd",
+    "jp morgan chase corp",
+    "jp morgan chase corporation",
+    "jp morgan chase inc",
+    "jp morgan chase company",
+    "jp morgan chase ltd",
+    "jp morgan chase limited",
+    "jp morgan chase llc",
+    "jp morgan chase plc",
+    "jp morgan chase holdings",
+    "jpmorgan",
+    "jpmorgan co",
+    "jpmorgan co ltd",
+    "jpmorgan corp",
+    "jpmorgan corporation",
+    "jpmorgan inc",
+    "jpmorgan company",
+    "jpmorgan ltd",
+    "jpmorgan limited",
+    "jpmorgan llc",
+    "jpmorgan plc",
+    "jpmorgan holdings",
+    "jp morgan",
+    "jp morgan co",
+    "jp morgan co ltd",
+    "jp morgan corp",
+    "jp morgan corporation",
+    "jp morgan inc",
+    "jp morgan company",
+    "jp morgan ltd",
+    "jp morgan limited",
+    "jp morgan llc",
+    "jp morgan plc",
+    "jp morgan holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "XOM",
+   "coverage": "orgs",
+   "aliases": [
+    "exxon mobil",
+    "exxon mobil co",
+    "exxon mobil co ltd",
+    "exxon mobil corp",
+    "exxon mobil corporation",
+    "exxon mobil inc",
+    "exxon mobil company",
+    "exxon mobil ltd",
+    "exxon mobil limited",
+    "exxon mobil llc",
+    "exxon mobil plc",
+    "exxon mobil holdings",
+    "exxonmobil",
+    "exxonmobil co",
+    "exxonmobil co ltd",
+    "exxonmobil corp",
+    "exxonmobil corporation",
+    "exxonmobil inc",
+    "exxonmobil company",
+    "exxonmobil ltd",
+    "exxonmobil limited",
+    "exxonmobil llc",
+    "exxonmobil plc",
+    "exxonmobil holdings",
+    "exxon",
+    "exxon co",
+    "exxon co ltd",
+    "exxon corp",
+    "exxon corporation",
+    "exxon inc",
+    "exxon company",
+    "exxon ltd",
+    "exxon limited",
+    "exxon llc",
+    "exxon plc",
+    "exxon holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "JNJ",
+   "coverage": "orgs",
+   "aliases": [
+    "johnson johnson",
+    "johnson johnson co",
+    "johnson johnson co ltd",
+    "johnson johnson corp",
+    "johnson johnson corporation",
+    "johnson johnson inc",
+    "johnson johnson company",
+    "johnson johnson ltd",
+    "johnson johnson limited",
+    "johnson johnson llc",
+    "johnson johnson plc",
+    "johnson johnson holdings",
+    "johnson and johnson",
+    "johnson and johnson co",
+    "johnson and johnson co ltd",
+    "johnson and johnson corp",
+    "johnson and johnson corporation",
+    "johnson and johnson inc",
+    "johnson and johnson company",
+    "johnson and johnson ltd",
+    "johnson and johnson limited",
+    "johnson and johnson llc",
+    "johnson and johnson plc",
+    "johnson and johnson holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "BRK-B",
+   "coverage": "orgs",
+   "aliases": [
+    "berkshire hathaway",
+    "berkshire hathaway co",
+    "berkshire hathaway co ltd",
+    "berkshire hathaway corp",
+    "berkshire hathaway corporation",
+    "berkshire hathaway inc",
+    "berkshire hathaway company",
+    "berkshire hathaway ltd",
+    "berkshire hathaway limited",
+    "berkshire hathaway llc",
+    "berkshire hathaway plc",
+    "berkshire hathaway holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "XLB",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLC",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLE",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLF",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLI",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLK",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLP",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLRE",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLU",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLV",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XLY",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "SMH",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "SOXX",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "IGV",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "HACK",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "SKYY",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "TAN",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "ICLN",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "LIT",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "URA",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XBI",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "IBB",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "ITA",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XAR",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "PPA",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "ROBO",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "BOTZ",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "KRE",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "IYR",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "XME",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "GDX",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "SLV",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "GLD",
+   "coverage": "none"
+  },
+  {
+   "market": "US",
+   "ticker": "CAT",
+   "coverage": "orgs",
+   "aliases": [
+    "caterpillar",
+    "caterpillar co",
+    "caterpillar co ltd",
+    "caterpillar corp",
+    "caterpillar corporation",
+    "caterpillar inc",
+    "caterpillar company",
+    "caterpillar ltd",
+    "caterpillar limited",
+    "caterpillar llc",
+    "caterpillar plc",
+    "caterpillar holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "DE",
+   "coverage": "orgs",
+   "aliases": [
+    "deere",
+    "deere co",
+    "deere co ltd",
+    "deere corp",
+    "deere corporation",
+    "deere inc",
+    "deere company",
+    "deere ltd",
+    "deere limited",
+    "deere llc",
+    "deere plc",
+    "deere holdings",
+    "john deere",
+    "john deere co",
+    "john deere co ltd",
+    "john deere corp",
+    "john deere corporation",
+    "john deere inc",
+    "john deere company",
+    "john deere ltd",
+    "john deere limited",
+    "john deere llc",
+    "john deere plc",
+    "john deere holdings"
+   ]
+  },
+  {
+   "market": "US",
+   "ticker": "UNP",
+   "coverage": "orgs",
+   "aliases": [
+    "union pacific",
+    "union pacific co",
+    "union pacific co ltd",
+    "union pacific corp",
+    "union pacific corporation",
+    "union pacific inc",
+    "union pacific company",
+    "union pacific ltd",
+    "union pacific limited",
+    "union pacific llc",
+    "union pacific plc",
+    "union pacific holdings",
+    "union pacific railroad",
+    "union pacific railroad co",
+    "union pacific railroad co ltd",
+    "union pacific railroad corp",
+    "union pacific railroad corporation",
+    "union pacific railroad inc",
+    "union pacific railroad company",
+    "union pacific railroad ltd",
+    "union pacific railroad limited",
+    "union pacific railroad llc",
+    "union pacific railroad plc",
+    "union pacific railroad holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "069500",
+   "coverage": "none"
+  },
+  {
+   "market": "KR",
+   "ticker": "005930",
+   "coverage": "orgs",
+   "aliases": [
+    "samsung electronics",
+    "samsung electronics co",
+    "samsung electronics co ltd",
+    "samsung electronics corp",
+    "samsung electronics corporation",
+    "samsung electronics inc",
+    "samsung electronics company",
+    "samsung electronics ltd",
+    "samsung electronics limited",
+    "samsung electronics llc",
+    "samsung electronics plc",
+    "samsung electronics holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000660",
+   "coverage": "orgs",
+   "aliases": [
+    "sk hynix",
+    "sk hynix co",
+    "sk hynix co ltd",
+    "sk hynix corp",
+    "sk hynix corporation",
+    "sk hynix inc",
+    "sk hynix company",
+    "sk hynix ltd",
+    "sk hynix limited",
+    "sk hynix llc",
+    "sk hynix plc",
+    "sk hynix holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "207940",
+   "coverage": "orgs",
+   "aliases": [
+    "samsung biologics",
+    "samsung biologics co",
+    "samsung biologics co ltd",
+    "samsung biologics corp",
+    "samsung biologics corporation",
+    "samsung biologics inc",
+    "samsung biologics company",
+    "samsung biologics ltd",
+    "samsung biologics limited",
+    "samsung biologics llc",
+    "samsung biologics plc",
+    "samsung biologics holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "005380",
+   "coverage": "orgs",
+   "aliases": [
+    "hyundai motor",
+    "hyundai motor co",
+    "hyundai motor co ltd",
+    "hyundai motor corp",
+    "hyundai motor corporation",
+    "hyundai motor inc",
+    "hyundai motor company",
+    "hyundai motor ltd",
+    "hyundai motor limited",
+    "hyundai motor llc",
+    "hyundai motor plc",
+    "hyundai motor holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000270",
+   "coverage": "orgs",
+   "aliases": [
+    "kia co",
+    "kia co ltd",
+    "kia corp",
+    "kia corporation",
+    "kia inc",
+    "kia company",
+    "kia ltd",
+    "kia limited",
+    "kia llc",
+    "kia plc",
+    "kia holdings",
+    "kia motors",
+    "kia motors co",
+    "kia motors co ltd",
+    "kia motors corp",
+    "kia motors corporation",
+    "kia motors inc",
+    "kia motors company",
+    "kia motors ltd",
+    "kia motors limited",
+    "kia motors llc",
+    "kia motors plc",
+    "kia motors holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "035420",
+   "coverage": "orgs",
+   "aliases": [
+    "naver",
+    "naver co",
+    "naver co ltd",
+    "naver corp",
+    "naver corporation",
+    "naver inc",
+    "naver company",
+    "naver ltd",
+    "naver limited",
+    "naver llc",
+    "naver plc",
+    "naver holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "051910",
+   "coverage": "orgs",
+   "aliases": [
+    "lg chem",
+    "lg chem co",
+    "lg chem co ltd",
+    "lg chem corp",
+    "lg chem corporation",
+    "lg chem inc",
+    "lg chem company",
+    "lg chem ltd",
+    "lg chem limited",
+    "lg chem llc",
+    "lg chem plc",
+    "lg chem holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "006400",
+   "coverage": "orgs",
+   "aliases": [
+    "samsung sdi",
+    "samsung sdi co",
+    "samsung sdi co ltd",
+    "samsung sdi corp",
+    "samsung sdi corporation",
+    "samsung sdi inc",
+    "samsung sdi company",
+    "samsung sdi ltd",
+    "samsung sdi limited",
+    "samsung sdi llc",
+    "samsung sdi plc",
+    "samsung sdi holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "105560",
+   "coverage": "orgs",
+   "aliases": [
+    "kb financial group",
+    "kb financial group co",
+    "kb financial group co ltd",
+    "kb financial group corp",
+    "kb financial group corporation",
+    "kb financial group inc",
+    "kb financial group company",
+    "kb financial group ltd",
+    "kb financial group limited",
+    "kb financial group llc",
+    "kb financial group plc",
+    "kb financial group holdings",
+    "kb financial",
+    "kb financial co",
+    "kb financial co ltd",
+    "kb financial corp",
+    "kb financial corporation",
+    "kb financial inc",
+    "kb financial company",
+    "kb financial ltd",
+    "kb financial limited",
+    "kb financial llc",
+    "kb financial plc",
+    "kb financial holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "055550",
+   "coverage": "orgs",
+   "aliases": [
+    "shinhan financial group",
+    "shinhan financial group co",
+    "shinhan financial group co ltd",
+    "shinhan financial group corp",
+    "shinhan financial group corporation",
+    "shinhan financial group inc",
+    "shinhan financial group company",
+    "shinhan financial group ltd",
+    "shinhan financial group limited",
+    "shinhan financial group llc",
+    "shinhan financial group plc",
+    "shinhan financial group holdings",
+    "shinhan financial",
+    "shinhan financial co",
+    "shinhan financial co ltd",
+    "shinhan financial corp",
+    "shinhan financial corporation",
+    "shinhan financial inc",
+    "shinhan financial company",
+    "shinhan financial ltd",
+    "shinhan financial limited",
+    "shinhan financial llc",
+    "shinhan financial plc",
+    "shinhan financial holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "035720",
+   "coverage": "orgs",
+   "aliases": [
+    "kakao",
+    "kakao co",
+    "kakao co ltd",
+    "kakao corp",
+    "kakao corporation",
+    "kakao inc",
+    "kakao company",
+    "kakao ltd",
+    "kakao limited",
+    "kakao llc",
+    "kakao plc",
+    "kakao holdings",
+    "daum kakao",
+    "daum kakao co",
+    "daum kakao co ltd",
+    "daum kakao corp",
+    "daum kakao corporation",
+    "daum kakao inc",
+    "daum kakao company",
+    "daum kakao ltd",
+    "daum kakao limited",
+    "daum kakao llc",
+    "daum kakao plc",
+    "daum kakao holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "042700",
+   "coverage": "orgs",
+   "aliases": [
+    "hanmi semiconductor",
+    "hanmi semiconductor co",
+    "hanmi semiconductor co ltd",
+    "hanmi semiconductor corp",
+    "hanmi semiconductor corporation",
+    "hanmi semiconductor inc",
+    "hanmi semiconductor company",
+    "hanmi semiconductor ltd",
+    "hanmi semiconductor limited",
+    "hanmi semiconductor llc",
+    "hanmi semiconductor plc",
+    "hanmi semiconductor holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000990",
+   "coverage": "orgs",
+   "aliases": [
+    "db hitek",
+    "db hitek co",
+    "db hitek co ltd",
+    "db hitek corp",
+    "db hitek corporation",
+    "db hitek inc",
+    "db hitek company",
+    "db hitek ltd",
+    "db hitek limited",
+    "db hitek llc",
+    "db hitek plc",
+    "db hitek holdings",
+    "dongbu hitek",
+    "dongbu hitek co",
+    "dongbu hitek co ltd",
+    "dongbu hitek corp",
+    "dongbu hitek corporation",
+    "dongbu hitek inc",
+    "dongbu hitek company",
+    "dongbu hitek ltd",
+    "dongbu hitek limited",
+    "dongbu hitek llc",
+    "dongbu hitek plc",
+    "dongbu hitek holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "017670",
+   "coverage": "orgs",
+   "aliases": [
+    "sk telecom",
+    "sk telecom co",
+    "sk telecom co ltd",
+    "sk telecom corp",
+    "sk telecom corporation",
+    "sk telecom inc",
+    "sk telecom company",
+    "sk telecom ltd",
+    "sk telecom limited",
+    "sk telecom llc",
+    "sk telecom plc",
+    "sk telecom holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000810",
+   "coverage": "orgs",
+   "aliases": [
+    "samsung fire marine insurance",
+    "samsung fire marine insurance co",
+    "samsung fire marine insurance co ltd",
+    "samsung fire marine insurance corp",
+    "samsung fire marine insurance corporation",
+    "samsung fire marine insurance inc",
+    "samsung fire marine insurance company",
+    "samsung fire marine insurance ltd",
+    "samsung fire marine insurance limited",
+    "samsung fire marine insurance llc",
+    "samsung fire marine insurance plc",
+    "samsung fire marine insurance holdings",
+    "samsung fire marine",
+    "samsung fire marine co",
+    "samsung fire marine co ltd",
+    "samsung fire marine corp",
+    "samsung fire marine corporation",
+    "samsung fire marine inc",
+    "samsung fire marine company",
+    "samsung fire marine ltd",
+    "samsung fire marine limited",
+    "samsung fire marine llc",
+    "samsung fire marine plc",
+    "samsung fire marine holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "036570",
+   "coverage": "orgs",
+   "aliases": [
+    "ncsoft",
+    "ncsoft co",
+    "ncsoft co ltd",
+    "ncsoft corp",
+    "ncsoft corporation",
+    "ncsoft inc",
+    "ncsoft company",
+    "ncsoft ltd",
+    "ncsoft limited",
+    "ncsoft llc",
+    "ncsoft plc",
+    "ncsoft holdings",
+    "nc soft",
+    "nc soft co",
+    "nc soft co ltd",
+    "nc soft corp",
+    "nc soft corporation",
+    "nc soft inc",
+    "nc soft company",
+    "nc soft ltd",
+    "nc soft limited",
+    "nc soft llc",
+    "nc soft plc",
+    "nc soft holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "263750",
+   "coverage": "orgs",
+   "aliases": [
+    "pearl abyss",
+    "pearl abyss co",
+    "pearl abyss co ltd",
+    "pearl abyss corp",
+    "pearl abyss corporation",
+    "pearl abyss inc",
+    "pearl abyss company",
+    "pearl abyss ltd",
+    "pearl abyss limited",
+    "pearl abyss llc",
+    "pearl abyss plc",
+    "pearl abyss holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "035900",
+   "coverage": "orgs",
+   "aliases": [
+    "jyp entertainment",
+    "jyp entertainment co",
+    "jyp entertainment co ltd",
+    "jyp entertainment corp",
+    "jyp entertainment corporation",
+    "jyp entertainment inc",
+    "jyp entertainment company",
+    "jyp entertainment ltd",
+    "jyp entertainment limited",
+    "jyp entertainment llc",
+    "jyp entertainment plc",
+    "jyp entertainment holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "041510",
+   "coverage": "orgs",
+   "aliases": [
+    "sm entertainment",
+    "sm entertainment co",
+    "sm entertainment co ltd",
+    "sm entertainment corp",
+    "sm entertainment corporation",
+    "sm entertainment inc",
+    "sm entertainment company",
+    "sm entertainment ltd",
+    "sm entertainment limited",
+    "sm entertainment llc",
+    "sm entertainment plc",
+    "sm entertainment holdings",
+    "s m entertainment",
+    "s m entertainment co",
+    "s m entertainment co ltd",
+    "s m entertainment corp",
+    "s m entertainment corporation",
+    "s m entertainment inc",
+    "s m entertainment company",
+    "s m entertainment ltd",
+    "s m entertainment limited",
+    "s m entertainment llc",
+    "s m entertainment plc",
+    "s m entertainment holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "096770",
+   "coverage": "orgs",
+   "aliases": [
+    "sk innovation",
+    "sk innovation co",
+    "sk innovation co ltd",
+    "sk innovation corp",
+    "sk innovation corporation",
+    "sk innovation inc",
+    "sk innovation company",
+    "sk innovation ltd",
+    "sk innovation limited",
+    "sk innovation llc",
+    "sk innovation plc",
+    "sk innovation holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "086520",
+   "coverage": "orgs",
+   "aliases": [
+    "ecopro",
+    "ecopro co",
+    "ecopro co ltd",
+    "ecopro corp",
+    "ecopro corporation",
+    "ecopro inc",
+    "ecopro company",
+    "ecopro ltd",
+    "ecopro limited",
+    "ecopro llc",
+    "ecopro plc",
+    "ecopro holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "247540",
+   "coverage": "orgs",
+   "aliases": [
+    "ecopro bm",
+    "ecopro bm co",
+    "ecopro bm co ltd",
+    "ecopro bm corp",
+    "ecopro bm corporation",
+    "ecopro bm inc",
+    "ecopro bm company",
+    "ecopro bm ltd",
+    "ecopro bm limited",
+    "ecopro bm llc",
+    "ecopro bm plc",
+    "ecopro bm holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "010120",
+   "coverage": "orgs",
+   "aliases": [
+    "ls electric",
+    "ls electric co",
+    "ls electric co ltd",
+    "ls electric corp",
+    "ls electric corporation",
+    "ls electric inc",
+    "ls electric company",
+    "ls electric ltd",
+    "ls electric limited",
+    "ls electric llc",
+    "ls electric plc",
+    "ls electric holdings",
+    "ls industrial systems",
+    "ls industrial systems co",
+    "ls industrial systems co ltd",
+    "ls industrial systems corp",
+    "ls industrial systems corporation",
+    "ls industrial systems inc",
+    "ls industrial systems company",
+    "ls industrial systems ltd",
+    "ls industrial systems limited",
+    "ls industrial systems llc",
+    "ls industrial systems plc",
+    "ls industrial systems holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "267260",
+   "coverage": "orgs",
+   "aliases": [
+    "hd hyundai electric",
+    "hd hyundai electric co",
+    "hd hyundai electric co ltd",
+    "hd hyundai electric corp",
+    "hd hyundai electric corporation",
+    "hd hyundai electric inc",
+    "hd hyundai electric company",
+    "hd hyundai electric ltd",
+    "hd hyundai electric limited",
+    "hd hyundai electric llc",
+    "hd hyundai electric plc",
+    "hd hyundai electric holdings",
+    "hyundai electric energy systems",
+    "hyundai electric energy systems co",
+    "hyundai electric energy systems co ltd",
+    "hyundai electric energy systems corp",
+    "hyundai electric energy systems corporation",
+    "hyundai electric energy systems inc",
+    "hyundai electric energy systems company",
+    "hyundai electric energy systems ltd",
+    "hyundai electric energy systems limited",
+    "hyundai electric energy systems llc",
+    "hyundai electric energy systems plc",
+    "hyundai electric energy systems holdings",
+    "hyundai electric",
+    "hyundai electric co",
+    "hyundai electric co ltd",
+    "hyundai electric corp",
+    "hyundai electric corporation",
+    "hyundai electric inc",
+    "hyundai electric company",
+    "hyundai electric ltd",
+    "hyundai electric limited",
+    "hyundai electric llc",
+    "hyundai electric plc",
+    "hyundai electric holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "298040",
+   "coverage": "orgs",
+   "aliases": [
+    "hyosung heavy industries",
+    "hyosung heavy industries co",
+    "hyosung heavy industries co ltd",
+    "hyosung heavy industries corp",
+    "hyosung heavy industries corporation",
+    "hyosung heavy industries inc",
+    "hyosung heavy industries company",
+    "hyosung heavy industries ltd",
+    "hyosung heavy industries limited",
+    "hyosung heavy industries llc",
+    "hyosung heavy industries plc",
+    "hyosung heavy industries holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "034020",
+   "coverage": "orgs",
+   "aliases": [
+    "doosan enerbility",
+    "doosan enerbility co",
+    "doosan enerbility co ltd",
+    "doosan enerbility corp",
+    "doosan enerbility corporation",
+    "doosan enerbility inc",
+    "doosan enerbility company",
+    "doosan enerbility ltd",
+    "doosan enerbility limited",
+    "doosan enerbility llc",
+    "doosan enerbility plc",
+    "doosan enerbility holdings",
+    "doosan heavy industries construction",
+    "doosan heavy industries construction co",
+    "doosan heavy industries construction co ltd",
+    "doosan heavy industries construction corp",
+    "doosan heavy industries construction corporation",
+    "doosan heavy industries construction inc",
+    "doosan heavy industries construction company",
+    "doosan heavy industries construction ltd",
+    "doosan heavy industries construction limited",
+    "doosan heavy industries construction llc",
+    "doosan heavy industries construction plc",
+    "doosan heavy industries construction holdings",
+    "doosan heavy industries",
+    "doosan heavy industries co",
+    "doosan heavy industries co ltd",
+    "doosan heavy industries corp",
+    "doosan heavy industries corporation",
+    "doosan heavy industries inc",
+    "doosan heavy industries company",
+    "doosan heavy industries ltd",
+    "doosan heavy industries limited",
+    "doosan heavy industries llc",
+    "doosan heavy industries plc",
+    "doosan heavy industries holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "015760",
+   "coverage": "orgs",
+   "aliases": [
+    "korea electric power",
+    "korea electric power co",
+    "korea electric power co ltd",
+    "korea electric power corp",
+    "korea electric power corporation",
+    "korea electric power inc",
+    "korea electric power company",
+    "korea electric power ltd",
+    "korea electric power limited",
+    "korea electric power llc",
+    "korea electric power plc",
+    "korea electric power holdings",
+    "kepco",
+    "kepco co",
+    "kepco co ltd",
+    "kepco corp",
+    "kepco corporation",
+    "kepco inc",
+    "kepco company",
+    "kepco ltd",
+    "kepco limited",
+    "kepco llc",
+    "kepco plc",
+    "kepco holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "009830",
+   "coverage": "orgs",
+   "aliases": [
+    "hanwha solutions",
+    "hanwha solutions co",
+    "hanwha solutions co ltd",
+    "hanwha solutions corp",
+    "hanwha solutions corporation",
+    "hanwha solutions inc",
+    "hanwha solutions company",
+    "hanwha solutions ltd",
+    "hanwha solutions limited",
+    "hanwha solutions llc",
+    "hanwha solutions plc",
+    "hanwha solutions holdings",
+    "hanwha chemical",
+    "hanwha chemical co",
+    "hanwha chemical co ltd",
+    "hanwha chemical corp",
+    "hanwha chemical corporation",
+    "hanwha chemical inc",
+    "hanwha chemical company",
+    "hanwha chemical ltd",
+    "hanwha chemical limited",
+    "hanwha chemical llc",
+    "hanwha chemical plc",
+    "hanwha chemical holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "112610",
+   "coverage": "orgs",
+   "aliases": [
+    "cs wind",
+    "cs wind co",
+    "cs wind co ltd",
+    "cs wind corp",
+    "cs wind corporation",
+    "cs wind inc",
+    "cs wind company",
+    "cs wind ltd",
+    "cs wind limited",
+    "cs wind llc",
+    "cs wind plc",
+    "cs wind holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "010950",
+   "coverage": "orgs",
+   "aliases": [
+    "s oil",
+    "s oil co",
+    "s oil co ltd",
+    "s oil corp",
+    "s oil corporation",
+    "s oil inc",
+    "s oil company",
+    "s oil ltd",
+    "s oil limited",
+    "s oil llc",
+    "s oil plc",
+    "s oil holdings",
+    "s-oil",
+    "s-oil co",
+    "s-oil co ltd",
+    "s-oil corp",
+    "s-oil corporation",
+    "s-oil inc",
+    "s-oil company",
+    "s-oil ltd",
+    "s-oil limited",
+    "s-oil llc",
+    "s-oil plc",
+    "s-oil holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "051900",
+   "coverage": "orgs",
+   "aliases": [
+    "lg household health care",
+    "lg household health care co",
+    "lg household health care co ltd",
+    "lg household health care corp",
+    "lg household health care corporation",
+    "lg household health care inc",
+    "lg household health care company",
+    "lg household health care ltd",
+    "lg household health care limited",
+    "lg household health care llc",
+    "lg household health care plc",
+    "lg household health care holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "005490",
+   "coverage": "orgs",
+   "aliases": [
+    "posco holdings",
+    "posco holdings co",
+    "posco holdings co ltd",
+    "posco holdings corp",
+    "posco holdings corporation",
+    "posco holdings inc",
+    "posco holdings company",
+    "posco holdings ltd",
+    "posco holdings limited",
+    "posco holdings llc",
+    "posco holdings plc",
+    "posco holdings holdings",
+    "posco",
+    "posco co",
+    "posco co ltd",
+    "posco corp",
+    "posco corporation",
+    "posco inc",
+    "posco company",
+    "posco ltd",
+    "posco limited",
+    "posco llc",
+    "posco plc",
+    "posco holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "010130",
+   "coverage": "orgs",
+   "aliases": [
+    "korea zinc",
+    "korea zinc co",
+    "korea zinc co ltd",
+    "korea zinc corp",
+    "korea zinc corporation",
+    "korea zinc inc",
+    "korea zinc company",
+    "korea zinc ltd",
+    "korea zinc limited",
+    "korea zinc llc",
+    "korea zinc plc",
+    "korea zinc holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "068270",
+   "coverage": "orgs",
+   "aliases": [
+    "celltrion",
+    "celltrion co",
+    "celltrion co ltd",
+    "celltrion corp",
+    "celltrion corporation",
+    "celltrion inc",
+    "celltrion company",
+    "celltrion ltd",
+    "celltrion limited",
+    "celltrion llc",
+    "celltrion plc",
+    "celltrion holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "128940",
+   "coverage": "orgs",
+   "aliases": [
+    "hanmi pharmaceutical",
+    "hanmi pharmaceutical co",
+    "hanmi pharmaceutical co ltd",
+    "hanmi pharmaceutical corp",
+    "hanmi pharmaceutical corporation",
+    "hanmi pharmaceutical inc",
+    "hanmi pharmaceutical company",
+    "hanmi pharmaceutical ltd",
+    "hanmi pharmaceutical limited",
+    "hanmi pharmaceutical llc",
+    "hanmi pharmaceutical plc",
+    "hanmi pharmaceutical holdings",
+    "hanmi pharm",
+    "hanmi pharm co",
+    "hanmi pharm co ltd",
+    "hanmi pharm corp",
+    "hanmi pharm corporation",
+    "hanmi pharm inc",
+    "hanmi pharm company",
+    "hanmi pharm ltd",
+    "hanmi pharm limited",
+    "hanmi pharm llc",
+    "hanmi pharm plc",
+    "hanmi pharm holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000100",
+   "coverage": "orgs",
+   "aliases": [
+    "yuhan",
+    "yuhan co",
+    "yuhan co ltd",
+    "yuhan corp",
+    "yuhan corporation",
+    "yuhan inc",
+    "yuhan company",
+    "yuhan ltd",
+    "yuhan limited",
+    "yuhan llc",
+    "yuhan plc",
+    "yuhan holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "000720",
+   "coverage": "orgs",
+   "aliases": [
+    "hyundai engineering construction",
+    "hyundai engineering construction co",
+    "hyundai engineering construction co ltd",
+    "hyundai engineering construction corp",
+    "hyundai engineering construction corporation",
+    "hyundai engineering construction inc",
+    "hyundai engineering construction company",
+    "hyundai engineering construction ltd",
+    "hyundai engineering construction limited",
+    "hyundai engineering construction llc",
+    "hyundai engineering construction plc",
+    "hyundai engineering construction holdings",
+    "hyundai e c",
+    "hyundai e c co",
+    "hyundai e c co ltd",
+    "hyundai e c corp",
+    "hyundai e c corporation",
+    "hyundai e c inc",
+    "hyundai e c company",
+    "hyundai e c ltd",
+    "hyundai e c limited",
+    "hyundai e c llc",
+    "hyundai e c plc",
+    "hyundai e c holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "108490",
+   "coverage": "orgs",
+   "aliases": [
+    "robotis",
+    "robotis co",
+    "robotis co ltd",
+    "robotis corp",
+    "robotis corporation",
+    "robotis inc",
+    "robotis company",
+    "robotis ltd",
+    "robotis limited",
+    "robotis llc",
+    "robotis plc",
+    "robotis holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "012450",
+   "coverage": "orgs",
+   "aliases": [
+    "hanwha aerospace",
+    "hanwha aerospace co",
+    "hanwha aerospace co ltd",
+    "hanwha aerospace corp",
+    "hanwha aerospace corporation",
+    "hanwha aerospace inc",
+    "hanwha aerospace company",
+    "hanwha aerospace ltd",
+    "hanwha aerospace limited",
+    "hanwha aerospace llc",
+    "hanwha aerospace plc",
+    "hanwha aerospace holdings",
+    {
+     "name": "hanwha techwin",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin co",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin co ltd",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin corp",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin corporation",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin inc",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin company",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin ltd",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin limited",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin llc",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin plc",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "hanwha techwin holdings",
+     "until": "2018-04-01"
+    },
+    {
+     "name": "samsung techwin",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin co",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin co ltd",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin corp",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin corporation",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin inc",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin company",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin ltd",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin limited",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin llc",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin plc",
+     "until": "2015-07-01"
+    },
+    {
+     "name": "samsung techwin holdings",
+     "until": "2015-07-01"
+    }
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "047810",
+   "coverage": "orgs",
+   "aliases": [
+    "korea aerospace industries",
+    "korea aerospace industries co",
+    "korea aerospace industries co ltd",
+    "korea aerospace industries corp",
+    "korea aerospace industries corporation",
+    "korea aerospace industries inc",
+    "korea aerospace industries company",
+    "korea aerospace industries ltd",
+    "korea aerospace industries limited",
+    "korea aerospace industries llc",
+    "korea aerospace industries plc",
+    "korea aerospace industries holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "079550",
+   "coverage": "orgs",
+   "aliases": [
+    "lig nex1",
+    "lig nex1 co",
+    "lig nex1 co ltd",
+    "lig nex1 corp",
+    "lig nex1 corporation",
+    "lig nex1 inc",
+    "lig nex1 company",
+    "lig nex1 ltd",
+    "lig nex1 limited",
+    "lig nex1 llc",
+    "lig nex1 plc",
+    "lig nex1 holdings",
+    "lig nex 1",
+    "lig nex 1 co",
+    "lig nex 1 co ltd",
+    "lig nex 1 corp",
+    "lig nex 1 corporation",
+    "lig nex 1 inc",
+    "lig nex 1 company",
+    "lig nex 1 ltd",
+    "lig nex 1 limited",
+    "lig nex 1 llc",
+    "lig nex 1 plc",
+    "lig nex 1 holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "009540",
+   "coverage": "orgs",
+   "aliases": [
+    "hd korea shipbuilding offshore engineering",
+    "hd korea shipbuilding offshore engineering co",
+    "hd korea shipbuilding offshore engineering co ltd",
+    "hd korea shipbuilding offshore engineering corp",
+    "hd korea shipbuilding offshore engineering corporation",
+    "hd korea shipbuilding offshore engineering inc",
+    "hd korea shipbuilding offshore engineering company",
+    "hd korea shipbuilding offshore engineering ltd",
+    "hd korea shipbuilding offshore engineering limited",
+    "hd korea shipbuilding offshore engineering llc",
+    "hd korea shipbuilding offshore engineering plc",
+    "hd korea shipbuilding offshore engineering holdings",
+    "korea shipbuilding offshore engineering",
+    "korea shipbuilding offshore engineering co",
+    "korea shipbuilding offshore engineering co ltd",
+    "korea shipbuilding offshore engineering corp",
+    "korea shipbuilding offshore engineering corporation",
+    "korea shipbuilding offshore engineering inc",
+    "korea shipbuilding offshore engineering company",
+    "korea shipbuilding offshore engineering ltd",
+    "korea shipbuilding offshore engineering limited",
+    "korea shipbuilding offshore engineering llc",
+    "korea shipbuilding offshore engineering plc",
+    "korea shipbuilding offshore engineering holdings",
+    {
+     "name": "hyundai heavy industries",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries co",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries co ltd",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries corp",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries corporation",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries inc",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries company",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries ltd",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries limited",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries llc",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries plc",
+     "until": "2019-06-01"
+    },
+    {
+     "name": "hyundai heavy industries holdings",
+     "until": "2019-06-01"
+    }
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "010140",
+   "coverage": "orgs",
+   "aliases": [
+    "samsung heavy industries",
+    "samsung heavy industries co",
+    "samsung heavy industries co ltd",
+    "samsung heavy industries corp",
+    "samsung heavy industries corporation",
+    "samsung heavy industries inc",
+    "samsung heavy industries company",
+    "samsung heavy industries ltd",
+    "samsung heavy industries limited",
+    "samsung heavy industries llc",
+    "samsung heavy industries plc",
+    "samsung heavy industries holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "042660",
+   "coverage": "orgs",
+   "aliases": [
+    "hanwha ocean",
+    "hanwha ocean co",
+    "hanwha ocean co ltd",
+    "hanwha ocean corp",
+    "hanwha ocean corporation",
+    "hanwha ocean inc",
+    "hanwha ocean company",
+    "hanwha ocean ltd",
+    "hanwha ocean limited",
+    "hanwha ocean llc",
+    "hanwha ocean plc",
+    "hanwha ocean holdings",
+    "daewoo shipbuilding marine engineering",
+    "daewoo shipbuilding marine engineering co",
+    "daewoo shipbuilding marine engineering co ltd",
+    "daewoo shipbuilding marine engineering corp",
+    "daewoo shipbuilding marine engineering corporation",
+    "daewoo shipbuilding marine engineering inc",
+    "daewoo shipbuilding marine engineering company",
+    "daewoo shipbuilding marine engineering ltd",
+    "daewoo shipbuilding marine engineering limited",
+    "daewoo shipbuilding marine engineering llc",
+    "daewoo shipbuilding marine engineering plc",
+    "daewoo shipbuilding marine engineering holdings",
+    "daewoo shipbuilding",
+    "daewoo shipbuilding co",
+    "daewoo shipbuilding co ltd",
+    "daewoo shipbuilding corp",
+    "daewoo shipbuilding corporation",
+    "daewoo shipbuilding inc",
+    "daewoo shipbuilding company",
+    "daewoo shipbuilding ltd",
+    "daewoo shipbuilding limited",
+    "daewoo shipbuilding llc",
+    "daewoo shipbuilding plc",
+    "daewoo shipbuilding holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "011200",
+   "coverage": "orgs",
+   "aliases": [
+    "hmm co",
+    "hmm co ltd",
+    "hmm corp",
+    "hmm corporation",
+    "hmm inc",
+    "hmm company",
+    "hmm ltd",
+    "hmm limited",
+    "hmm llc",
+    "hmm plc",
+    "hmm holdings",
+    "hyundai merchant marine",
+    "hyundai merchant marine co",
+    "hyundai merchant marine co ltd",
+    "hyundai merchant marine corp",
+    "hyundai merchant marine corporation",
+    "hyundai merchant marine inc",
+    "hyundai merchant marine company",
+    "hyundai merchant marine ltd",
+    "hyundai merchant marine limited",
+    "hyundai merchant marine llc",
+    "hyundai merchant marine plc",
+    "hyundai merchant marine holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "090430",
+   "coverage": "orgs",
+   "aliases": [
+    "amorepacific",
+    "amorepacific co",
+    "amorepacific co ltd",
+    "amorepacific corp",
+    "amorepacific corporation",
+    "amorepacific inc",
+    "amorepacific company",
+    "amorepacific ltd",
+    "amorepacific limited",
+    "amorepacific llc",
+    "amorepacific plc",
+    "amorepacific holdings",
+    "amore pacific",
+    "amore pacific co",
+    "amore pacific co ltd",
+    "amore pacific corp",
+    "amore pacific corporation",
+    "amore pacific inc",
+    "amore pacific company",
+    "amore pacific ltd",
+    "amore pacific limited",
+    "amore pacific llc",
+    "amore pacific plc",
+    "amore pacific holdings"
+   ]
+  },
+  {
+   "market": "KR",
+   "ticker": "097950",
+   "coverage": "orgs",
+   "aliases": [
+    "cj cheiljedang",
+    "cj cheiljedang co",
+    "cj cheiljedang co ltd",
+    "cj cheiljedang corp",
+    "cj cheiljedang corporation",
+    "cj cheiljedang inc",
+    "cj cheiljedang company",
+    "cj cheiljedang ltd",
+    "cj cheiljedang limited",
+    "cj cheiljedang llc",
+    "cj cheiljedang plc",
+    "cj cheiljedang holdings"
+   ]
+  }
+ ]
+}
