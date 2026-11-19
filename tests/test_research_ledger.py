@@ -15,6 +15,9 @@ import research_ledger  # noqa: E402
 FORBIDDEN = re.compile(r"sharpe|cagr|mdd|drawdown|return|excess|pnl|profit|volatility", re.I)
 
 
+KNOWN_FAMILIES = {fam for _, fam in research_ledger.FAMILIES}
+
+
 def run(root):
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -43,14 +46,16 @@ class ResearchLedger(unittest.TestCase):
             self.assertEqual((ema["source"], ema["selected_candidate"]), ("legacy", "v002"))
         for s in data["sets"]:
             self.assertIn(s["grid_position"], {"edge", "interior", "baseline", "unknown"})
-            self.assertNotEqual(s["hypothesis_family"], "unknown", s["set_id"])
+            # New families stay honestly "unknown" until mapped (#91); never invented.
+            self.assertIn(s["hypothesis_family"], KNOWN_FAMILIES | {"unknown"}, s["set_id"])
         agg = data["aggregates"]
         self.assertEqual(sum(agg["conclusion_counts"].values()), agg["set_count"])
 
     def test_no_numeric_performance_in_output(self):
         for k, v in walk(json.loads(run(ROOT))):
             self.assertIsNone(FORBIDDEN.search(k), k)
-            if isinstance(v, str):
+            # set_id is a name, not a metric: "volatility_targeting" is not leakage (#91).
+            if isinstance(v, str) and k != "set_id":
                 self.assertIsNone(FORBIDDEN.search(v), v)
             if isinstance(v, float):
                 self.assertEqual(k, "edge_selection_ratio")
@@ -77,6 +82,17 @@ class ResearchLedger(unittest.TestCase):
         self.assertEqual(data["aggregates"]["sets_with_unknown_attempts"], 1)
         self.assertEqual(research_ledger.grid_position("v002", {"baseline": (1.0,), "v001": (3.0,), "v002": (2.0,)}),
                          "interior")
+
+    def test_unmapped_family_name_is_unknown_not_leakage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); d = root / "research" / "2026-03-01_volatility_targeting"; d.mkdir(parents=True)
+            (d / "publication.json").write_text(json.dumps({"conclusion": "defer", "attempt_count": 3}))
+            data = json.loads(run(root))
+        self.assertEqual(data["sets"][0]["hypothesis_family"], "unknown")
+        self.assertEqual(data["aggregates"]["family_conclusion_counts"], {"unknown": {"defer": 1}})
+        for k, v in walk(data):
+            if isinstance(v, str) and k != "set_id":
+                self.assertIsNone(FORBIDDEN.search(v), v)
 
     def test_publication_candidates_take_precedence_over_prose(self):
         with tempfile.TemporaryDirectory() as tmp:
