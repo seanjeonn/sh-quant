@@ -1012,6 +1012,22 @@ Path(''' + repr(str(marker)) + ''').write_text(str(t.pid))
             self.assertFalse((f.auto / 'canary-receipt.json').exists())
             with self.assertRaises(ValueError): s.run('canary')
 
+    def test_quoted_check_name_is_not_a_provider_error(self):
+        # #93: a completed report quoting the "forbidden-word" check blocked the day.
+        cases = [(b'ledger metadata forbidden-word test failure recorded in issue 91\n', True),
+                 (b'HTTP/1.1 403 Forbidden\n', False), (b'Error: Forbidden\n', False),
+                 (b'request forbidden by provider\n', False)]
+        for text, ok in cases:
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                f = Fixture(tmp)
+                def execute(argv, **kw):
+                    kw['stdout'].write(text + b'CANARY_OK synthetic123\n')
+                    return 0, False
+                s = f.supervisor(executor=execute, verifier=lambda r, sid: dict(state='completed', set_id=sid, attempt_count=3))
+                if ok: self.assertEqual(s.run('canary'), '카나리 통과 synthetic123')
+                else:
+                    with self.assertRaises(ValueError): s.run('canary')
+
     def test_owned_trial_cleans_normal_and_timeout_descendants(self):
         for timeout in (False, True):
             with self.subTest(timeout=timeout), tempfile.TemporaryDirectory() as tmp:

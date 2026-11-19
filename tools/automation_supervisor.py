@@ -368,10 +368,12 @@ class Supervisor:
         if kind != 'acquisition':
             # CLI versions can report provider failures while exiting zero. This
             # deliberately conservative deny pattern may block a quoted 403 too;
-            # it never turns output into completion evidence.
+            # it never turns output into completion evidence. Hyphenated
+            # identifiers such as a quoted "forbidden-word" check name are not
+            # provider errors (#93); bare "forbidden" still blocks.
             for name in ('stdout.log', 'stderr.log'):
                 raw = private(inv / name).read_bytes()
-                require(re.search(rb'(?i)(?:\b403\b|\bforbidden\b|\b(?:provider|authentication|api)[ _-]+error\b)', raw) is None)
+                require(re.search(rb'(?i)(?:\b403\b|\bforbidden\b(?!-\w)|\b(?:provider|authentication|api)[ _-]+error\b)', raw) is None)
         return inv
 
     def agent(self, folder, mode, prompt, cwd, budget=None):
