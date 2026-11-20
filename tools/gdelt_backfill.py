@@ -13,6 +13,7 @@ Output stays private (outside Git, 700/600). GDELT data is free to use and
 redistribute with a citation and link to https://www.gdeltproject.org/.
 """
 import argparse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
 import hashlib
@@ -23,6 +24,7 @@ from pathlib import Path
 import re
 import sys
 import time
+from urllib.error import HTTPError
 import urllib.request
 import zipfile
 
@@ -36,6 +38,7 @@ GKG = re.compile(r'https?://data\.gdeltproject\.org/gdeltv2/((\d{14})\.(?:transl
 # GKG 2.1 columns (27, tab-separated). Verified against live files 2026-11-19.
 DATE, SOURCE, URL, ORGS, TONE, TRANSLATION, COLUMNS = 1, 3, 4, 13, 15, 25, 27
 MAX_FAILURES = 3
+MISSING_RECEIPT = 'declared-missing.json'
 
 
 def fetch(url):
@@ -70,6 +73,48 @@ def append(path, event):
 
 def events(path):
     return [rs.decode_json(line) for line in read(path).splitlines() if line] if path.exists() else []
+
+
+def file_plan(output):
+    raw = read(output / 'plan.json')
+    return rs.decode_json(raw)['files'], digest(raw)
+
+
+def validate_missing(names, files, done, failed):
+    require(isinstance(names, list) and names and all(isinstance(n, str) for n in names), 'invalid_missing')
+    missing = set(names)
+    require(len(missing) == len(names) and not missing & done, 'invalid_missing')
+    require(missing <= {f['name'] for f in files}, 'invalid_missing')
+    relevant = [e for e in failed if e['name'] in missing]
+    counts = Counter(e['name'] for e in relevant)
+    require(all(e['code'] in ('HTTPError', 'http_404') for e in relevant)
+            and all(counts[n] >= MAX_FAILURES for n in missing), 'invalid_missing')
+    return missing
+
+
+def declare_missing(output, names):
+    output = Path(output)
+    files, plan_sha = file_plan(output)
+    done = {e['name'] for e in events(output / 'done.jsonl')}
+    missing = validate_missing(names, files, done, events(output / 'failed.jsonl'))
+    receipt = output / MISSING_RECEIPT
+    raw = encode(dict(schema_version=1, plan_sha256=plan_sha, reason='operator_confirmed_http_404',
+                      files=sorted(missing)))
+    try:
+        immutable(receipt, raw)
+    except FileExistsError:
+        require(read(receipt) == raw, 'missing_declaration_changed')
+
+
+def declared_missing(output, files, plan_sha, done, failed):
+    receipt = output / MISSING_RECEIPT
+    if not receipt.exists() and not receipt.is_symlink():
+        return set()
+    data = load(receipt)
+    require(isinstance(data, dict) and data.get('schema_version') == 1
+            and data.get('plan_sha256') == plan_sha
+            and data.get('reason') == 'operator_confirmed_http_404', 'invalid_missing_receipt')
+    return validate_missing(data.get('files'), files, done, failed)
 
 
 def plan(start, end, output, *, opener=fetch):
@@ -150,19 +195,19 @@ def process(entry, output, index, opener):
 
 def run(output, aliases, *, max_files, max_minutes, workers=4, opener=fetch):
     output = Path(output); deadline = time.monotonic() + max_minutes * 60
-    files = load(output / 'plan.json')['files']
+    files, plan_sha = file_plan(output)
     raw = Path(aliases).read_bytes(); index = alias_index(raw); alias_sha = digest(raw)
     done_events = events(output / 'done.jsonl')
     require(all(e['aliases_sha256'] == alias_sha for e in done_events), 'aliases_changed')
     done = {e['name'] for e in done_events}
-    failures = {}
-    for e in events(output / 'failed.jsonl'):
-        failures[e['name']] = failures.get(e['name'], 0) + 1
+    failed = events(output / 'failed.jsonl')
+    missing = declared_missing(output, files, plan_sha, done, failed)
+    failures = Counter(e['name'] for e in failed if e['name'] not in missing)
     require(max(failures.values(), default=0) < MAX_FAILURES, 'retry_limit')
     tmp = private_dir(output / 'tmp')
     for leftover in tmp.glob('*.part'): leftover.unlink()  # our own interrupted downloads
     private_dir(output / 'matches')
-    pending = [f for f in files if f['name'] not in done][:max_files]
+    pending = [f for f in files if f['name'] not in done and f['name'] not in missing][:max_files]
     finished = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = []
@@ -174,6 +219,8 @@ def run(output, aliases, *, max_files, max_minutes, workers=4, opener=fetch):
                 result = future.result()
             except Exception as error:  # recorded, never skipped silently
                 code = str(error) if type(error) is Blocked else type(error).__name__
+                if isinstance(error, HTTPError) and 400 <= error.code <= 599:
+                    code = f'http_{error.code}'
                 append(output / 'failed.jsonl', dict(name=entry['name'], code=code))
                 failures[entry['name']] = failures.get(entry['name'], 0) + 1
                 continue
@@ -186,10 +233,12 @@ def run(output, aliases, *, max_files, max_minutes, workers=4, opener=fetch):
 
 def status(output):
     output = Path(output)
-    files = load(output / 'plan.json')['files']; done = events(output / 'done.jsonl')
+    files, plan_sha = file_plan(output); done = events(output / 'done.jsonl')
     failed = events(output / 'failed.jsonl'); names = {e['name'] for e in done}
-    return dict(planned=len(files), done=len(names), pending=len(files) - len(names),
-                failed_attempts=len(failed), failing_files=len({e['name'] for e in failed} - names),
+    missing = declared_missing(output, files, plan_sha, names, failed)
+    return dict(planned=len(files), done=len(names), pending=len(files) - len(names) - len(missing),
+                missing=len(missing), missing_bytes=sum(f['size'] for f in files if f['name'] in missing),
+                failed_attempts=len(failed), failing_files=len({e['name'] for e in failed} - names - missing),
                 bytes_done=sum(e['bytes'] for e in done), bytes_planned=sum(f['size'] for f in files),
                 matched_articles=sum(e['matched'] for e in done), bad_rows=sum(e['bad_rows'] for e in done))
 
@@ -201,11 +250,15 @@ def main(argv=None):
     b = sub.add_parser('run'); b.add_argument('--aliases', required=True)
     b.add_argument('--max-files', type=int, required=True); b.add_argument('--max-minutes', type=float, required=True)
     b.add_argument('--workers', type=int, default=4, choices=range(1, 5))
-    sub.add_parser('status')
-    for s in (a, b, sub.choices['status']): s.add_argument('--output', required=True)
+    c = sub.add_parser('declare-missing', help='Freeze exact, operator-confirmed HTTP 404 gaps after diagnosing them')
+    c.add_argument('--file', action='append', required=True)
+    for s in (a, b, c, sub.add_parser('status')): s.add_argument('--output', required=True)
     args = p.parse_args(argv)
     try:
         if args.command == 'plan': value = dict(planned=plan(args.start, args.end, args.output))
+        elif args.command == 'declare-missing':
+            declare_missing(args.output, args.file)
+            value = status(args.output)
         elif args.command == 'run':
             value = dict(finished=run(args.output, args.aliases, max_files=args.max_files,
                                       max_minutes=args.max_minutes, workers=args.workers))
