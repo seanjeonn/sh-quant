@@ -33,6 +33,18 @@ python3 tools/gdelt_backfill.py run --output <private>/gdelt-202401 --aliases un
 python3 tools/gdelt_backfill.py status --output <private>/gdelt-202401
 ```
 
+## 승인된 결손이 있는 백필 재개
+
+`retry_limit`은 기본적으로 유지된다. 공식 원본 주소에서 404를 별도로 확인하고 운영 승인을 받은 경우에만, 백필 작업을 중지한 상태에서 정확한 파일명을 지정한다.
+
+```text
+python3 tools/gdelt_backfill.py declare-missing --output <private>/gdelt-full --file <exact-archive-name> [--file <another-approved-name>]
+```
+
+이 명령은 고정 계획의 미완료 파일 중 3회 이상 HTTP 오류가 기록된 항목만 받는다. 과거 로그의 `HTTPError`에는 상태 코드가 없으므로 운영자가 404를 먼저 검증해야 한다. 출력의 `declared-missing.json`은 계획 해시와 정확한 파일 목록을 고정하며, 재실행으로 목록을 덮어쓸 수 없다. `plan.json`, `done.jsonl`, `failed.jsonl`은 이 명령으로 변경되지 않는다. 이후 `run`은 다른 파일에 기존 재시도 한도를 적용한다.
+
+`status`는 `planned = done + pending + missing`으로 구분한다. `failing_files`는 결손으로 선언되지 않은 미해결 실패만 센다. `failed_attempts`에는 과거 실패가 모두 남는다. `pending: 0`이라도 `missing > 0`이면 결손이 있는 수집으로 보고하며 전체 커버리지 완료가 아니다.
+
 ## 별칭 카탈로그 `universes/thematic-v1-news-aliases.json`
 
 - thematic-v1 96종목 중 개별 종목 60개만 `coverage: orgs`다. ETF와 지수 상품은 `none`이다. 기사가 0건인 것과 커버리지가 없는 것을 구분하기 위해서다.

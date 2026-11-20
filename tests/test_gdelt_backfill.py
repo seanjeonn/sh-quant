@@ -107,6 +107,46 @@ class Backfill(unittest.TestCase):
         self.assertEqual({f['code'] for f in failed}, {'md5_mismatch'})
         with self.assertRaises(rs.Blocked): self.run_once()  # stays blocked, no silent skip
 
+    def test_declared_missing_is_not_done_and_resume_preserves_ledgers(self):
+        g.plan('2024-01-01', '2024-02-01', self.out, opener=self.fake)
+        missing, failed = '20240101000000.gkg.csv.zip', self.out / 'failed.jsonl'
+        for _ in range(g.MAX_FAILURES):
+            g.append(failed, {'name': missing, 'code': 'HTTPError'})
+        original_failures = failed.read_bytes()
+        original_plan = (self.out / 'plan.json').read_bytes()
+        with self.assertRaisesRegex(rs.Blocked, 'retry_limit'):
+            self.run_once()
+        g.declare_missing(self.out, [missing])
+        self.assertEqual(self.run_once(), 2)
+        self.assertEqual(self.run_once(), 0)
+        st = g.status(self.out)
+        self.assertEqual((st['planned'], st['done'], st['pending'], st['missing'], st['failing_files']), (3, 2, 0, 1, 0))
+        self.assertEqual(st['missing_bytes'], len(self.archives[missing]))
+        self.assertNotIn(missing, self.fake.calls)
+        self.assertEqual(failed.read_bytes(), original_failures)
+        self.assertEqual((self.out / 'plan.json').read_bytes(), original_plan)
+
+    def test_missing_declaration_cannot_extend_to_other_failures(self):
+        g.plan('2024-01-01', '2024-02-01', self.out, opener=self.fake)
+        first, second, bad = list(self.archives)[:3]
+        failed = self.out / 'failed.jsonl'
+        with self.assertRaisesRegex(rs.Blocked, 'invalid_missing'):
+            g.declare_missing(self.out, [first])
+        for _ in range(g.MAX_FAILURES):
+            g.append(failed, {'name': first, 'code': 'HTTPError'})
+            g.append(failed, {'name': bad, 'code': 'md5_mismatch'})
+        with self.assertRaisesRegex(rs.Blocked, 'invalid_missing'):
+            g.declare_missing(self.out, [bad])
+        g.declare_missing(self.out, [first])
+        g.declare_missing(self.out, [first])  # identical receipt is idempotent
+        for _ in range(g.MAX_FAILURES):
+            g.append(failed, {'name': second, 'code': 'HTTPError'})
+        with self.assertRaises(rs.Blocked):
+            g.declare_missing(self.out, [first, second])
+        with self.assertRaisesRegex(rs.Blocked, 'retry_limit'):
+            self.run_once()
+        self.assertEqual(self.fake.calls, [])
+
     def test_interrupt_after_match_write_does_not_duplicate(self):
         g.plan('2024-01-01', '2024-01-02', self.out, opener=self.fake)
         self.run_once()
