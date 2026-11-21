@@ -1,0 +1,11 @@
+# Rising-SMA gate for prior-high proximity — research notes
+
+Tracking #124; preregistered follow-up #117 to #116 / PR #118. The earlier study compared thresholds; this one fixes the threshold at 95% of the prior 252-bar high (excluding the signal bar) and tests trend direction. The baseline is unfiltered. The two variants require the 200-bar SMA to exceed its value 20 or 60 bars earlier. The engine's next-bar execution is unchanged. The gate could screen out rebounds in declining trends, but it requires more history and can miss early recoveries.
+
+All three preregistered candidates succeeded once in sequence, with no repairs or reruns. `mean_is_sharpe_v1` ranked the baseline first, the 60-bar variant second, and the 20-bar variant third. Neither slope gate improved the declared IS objective in this finite comparison. After the selection checkpoint, `sharpe_excess_mdd_v1` rejected the selected baseline: its OOS excess CAGR was negative against buy-and-hold in both markets, and its mean OOS Sharpe equaled the baseline's by construction. No strategy is adopted. This does not rule out other trend filters.
+
+Plan checkpoint `64804790ccda68e1d890923a9548c2bb8def9e5b` preceded trials. Selection checkpoint `5e675c755bad65e6fb44e737b255493692429b6d` preceded evaluation. Runner verification passed. Private lessons SHA-256: `5b796c2cc71c467b53fbf88715490f9d5e099c09a6ac455fff36fe976b20e509`. The supervisor-rendered `publication.json` is the sole completion record and carries the private report and evaluation hashes.
+
+OOS was computed alongside IS and overlaps earlier studies; it is exposed, not independent validation. Provider-adjusted prices do not measure dividend-reinvested total returns. The current-selected universe is not point-in-time, and calendar and corporate-action coverage are not certified (#13, #28, #16, #74). Only the supplied frozen snapshot was used; raw data, metrics and curves stay private.
+
+Next experiment (#125, deferred): compare one, two and five consecutive closes within 95% of each bar's prior 252-bar high, without a slope gate. Holding threshold, lookback and execution fixed isolates whether short-term confirmation filters fleeting strength or instead delays entry. No persistence trial was run in this set.
